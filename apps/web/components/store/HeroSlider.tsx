@@ -58,8 +58,10 @@ export function HeroSlider({
   );
 
   const current = slides[index];
-  const title = current?.title || storeName;
-  const subtitle = current?.subtitle || tagline;
+  // Só o texto escrito para o slide: o nome da loja já está no cabeçalho
+  // (e normalmente na própria arte da capa), repetir aqui fica redundante.
+  const title = current?.title ?? "";
+  const subtitle = current?.subtitle ?? "";
 
   return (
     <section
@@ -125,15 +127,19 @@ export function HeroSlider({
 
       <div className="relative p-6 pb-14 sm:absolute sm:inset-x-0 sm:bottom-0 sm:p-10 sm:pb-20 lg:p-14 lg:pb-24">
         <div key={`${index}-${title}`} className="max-w-2xl space-y-4 text-white">
-          <span className="inline-flex animate-fade-up items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] backdrop-blur-md">
-            {storeName}
-          </span>
-          <h1
-            className="animate-fade-up font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
-            style={{ animationDelay: "80ms" }}
-          >
-            {title}
-          </h1>
+          {title ? (
+            <h1
+              className="animate-fade-up font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
+              style={{ animationDelay: "80ms" }}
+            >
+              {title}
+            </h1>
+          ) : (
+            <h1 className="sr-only">
+              {storeName}
+              {tagline ? ` — ${tagline}` : ""}
+            </h1>
+          )}
           {subtitle && (
             <p
               className="max-w-xl animate-fade-up text-base text-white/80 sm:text-lg"

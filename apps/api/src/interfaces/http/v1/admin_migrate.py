@@ -398,6 +398,43 @@ def rename_org(
     return {"organization_id": organization_id, "name": name, "slug": slug}
 
 
+@router.get("/migrate-firestore/orders-check")
+def orders_check(
+    organization_id: str,
+    x_migration_secret: str | None = Header(default=None),
+) -> dict:
+    """Every order doc of one organization (including soft-deleted ones), with
+
+    just enough to compare against what the Pedidos screen shows.
+    """
+    _require_secret(x_migration_secret)
+    client = get_firestore_client()
+    orders_ref = client.collection("organizations").document(organization_id).collection("orders")
+    customers_ref = client.collection("organizations").document(organization_id).collection(
+        "customers"
+    )
+    customers = {s.id: s.to_dict() for s in customers_ref.stream()}
+    rows = []
+    for snap in orders_ref.stream():
+        data = snap.to_dict()
+        customer = customers.get(data.get("customer_id") or "")
+        rows.append(
+            {
+                "id": snap.id[:8],
+                "created_at": str(data.get("created_at"))[:19],
+                "status": data.get("status"),
+                "deleted": data.get("deleted_at") is not None,
+                "customer": (customer or {}).get("name"),
+                "customer_deleted": bool(customer and customer.get("deleted_at")),
+                "items": sum(1 for _ in snap.reference.collection("items").stream()),
+                "total": data.get("total_amount"),
+                "has_created_at": "created_at" in data,
+            }
+        )
+    rows.sort(key=lambda r: r["created_at"])
+    return {"count": len(rows), "orders": rows}
+
+
 @router.get("/migrate-firestore/hash-selftest")
 def hash_selftest(x_migration_secret: str | None = Header(default=None)) -> dict:
     """Does password hashing/verification work inside the deployed function?

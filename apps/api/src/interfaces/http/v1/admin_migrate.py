@@ -398,6 +398,59 @@ def rename_org(
     return {"organization_id": organization_id, "name": name, "slug": slug}
 
 
+@router.get("/migrate-firestore/hash-selftest")
+def hash_selftest(x_migration_secret: str | None = Header(default=None)) -> dict:
+    """Does password hashing/verification work inside the deployed function?
+
+    Uses a throwaway string; touches no account and stores nothing.
+    """
+    from src.domain.shared.security import hash_password, verify_password
+
+    _require_secret(x_migration_secret)
+    sample = "selftest-not-a-real-password"
+    hashed = hash_password(sample)
+    return {
+        "correct_password_accepted": verify_password(sample, hashed),
+        "wrong_password_rejected": not verify_password(sample + "x", hashed),
+    }
+
+
+@router.get("/migrate-firestore/user-check")
+def user_check(
+    email: str,
+    x_migration_secret: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Booleans/counts only: is this login e-mail intact in Firestore compared
+
+    with the original Postgres row (index entry, active flag, password hash)?
+    """
+    _require_secret(x_migration_secret)
+    client = get_firestore_client()
+    pg_users = list(db.scalars(select(sql.User)))
+    pg_user = next((u for u in pg_users if u.email == email), None)
+    index = client.collection("email_index").document(email).get()
+    fs_user = None
+    if index.exists:
+        snap = client.collection("users").document(index.to_dict()["user_id"]).get()
+        fs_user = snap.to_dict() if snap.exists else None
+    return {
+        "in_postgres": pg_user is not None,
+        "same_email_ignoring_case_in_postgres": sum(
+            1 for u in pg_users if u.email.lower() == email.lower()
+        ),
+        "in_email_index": index.exists,
+        "firestore_user_found": fs_user is not None,
+        "ids_match": bool(
+            pg_user and index.exists and index.to_dict()["user_id"] == str(pg_user.id)
+        ),
+        "is_active_in_firestore": bool(fs_user and fs_user.get("is_active")),
+        "password_hash_matches_postgres": bool(
+            pg_user and fs_user and fs_user.get("password_hash") == pg_user.password_hash
+        ),
+    }
+
+
 @router.get("/migrate-firestore/verify")
 def verify_firestore(
     x_migration_secret: str | None = Header(default=None),

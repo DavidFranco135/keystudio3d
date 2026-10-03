@@ -188,7 +188,14 @@ export function Storefront({ slug }: { slug: string }) {
     let cancelled = false;
     apiFetch<PublicStore>(`/api/v1/public/stores/${encodeURIComponent(slug)}`)
       .then((data) => {
-        if (!cancelled) setStore(data);
+        if (cancelled) return;
+        // Um servidor mais antigo que o site não manda as categorias; sem
+        // isso a loja quebraria inteira em vez de só não mostrá-las.
+        setStore({
+          ...data,
+          settings: { ...data.settings, categories: data.settings.categories ?? [] },
+          products: data.products.map((p) => ({ ...p, category_ids: p.category_ids ?? [] })),
+        });
       })
       .catch((err) => {
         if (!cancelled)

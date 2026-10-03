@@ -371,9 +371,18 @@ export function Storefront({ slug }: { slug: string }) {
       <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button onClick={() => goTab(0)} className="flex min-w-0 items-center gap-3 text-left">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--accent-ink)] shadow-md">
-              {storeName.slice(0, 1).toUpperCase()}
-            </span>
+            {settings.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={settings.logo_url}
+                alt={storeName}
+                className="h-11 w-11 shrink-0 rounded-2xl object-cover shadow-md"
+              />
+            ) : (
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--accent-ink)] shadow-md">
+                {storeName.slice(0, 1).toUpperCase()}
+              </span>
+            )}
             <span className="min-w-0">
               <span className="block truncate font-[family-name:var(--font-display)] text-lg font-semibold leading-tight">
                 {storeName}

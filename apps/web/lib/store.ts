@@ -3,6 +3,7 @@ export type StoreHighlight = { title: string; text: string };
 
 export type StoreSettings = {
   display_name: string;
+  logo_url: string;
   tagline: string;
   about: string;
   whatsapp: string;

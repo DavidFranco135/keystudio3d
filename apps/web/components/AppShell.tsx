@@ -196,7 +196,11 @@ export function AppShell({ title, children }: { title?: string; children: React.
     <div className="flex min-h-screen">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 lg:flex">
         <div className="flex items-center gap-2 border-b border-neutral-800 px-5 py-4">
-          <span className="font-semibold">3D AI Studio</span>
+          <span className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/keystudio3d-mark.png" alt="" className="h-8 w-8 rounded-lg" />
+            <span className="font-semibold">KeyStudio3D</span>
+          </span>
         </div>
         <SidebarContent pathname={pathname} />
       </aside>
@@ -209,7 +213,11 @@ export function AppShell({ title, children }: { title?: string; children: React.
           />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-neutral-800 bg-neutral-950 shadow-xl transition-transform">
             <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-              <span className="font-semibold">3D AI Studio</span>
+              <span className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/keystudio3d-mark.png" alt="" className="h-8 w-8 rounded-lg" />
+            <span className="font-semibold">KeyStudio3D</span>
+          </span>
               <button
                 onClick={() => setMobileNavOpen(false)}
                 aria-label="Fechar menu"

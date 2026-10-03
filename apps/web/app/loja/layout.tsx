@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   title: "Catálogo",
   description: "Catálogo de produtos com pedido direto pelo WhatsApp.",
   manifest: undefined,
+  openGraph: {
+    title: "Catálogo",
+    description: "Catálogo de produtos com pedido direto pelo WhatsApp.",
+    images: [{ url: "/brand/keystudio3d-logo.png", width: 1000, height: 916 }],
+  },
 };
 
 export const viewport: Viewport = {

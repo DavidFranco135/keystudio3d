@@ -163,7 +163,7 @@ export default function PrecificacaoPublicaPage() {
       <div className="print:hidden">
         <header className="border-b border-neutral-800 px-4 py-4 sm:px-6">
           <div className="mx-auto max-w-4xl">
-            <h1 className="text-lg font-semibold">Calculadora de Precificação — 3D AI Studio</h1>
+            <h1 className="text-lg font-semibold">Calculadora de Precificação — KeyStudio3D</h1>
             <p className="text-sm text-neutral-500">
               Preencha os custos abaixo para calcular o preço de venda sugerido de uma peça impressa em 3D.
             </p>

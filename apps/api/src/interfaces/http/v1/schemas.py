@@ -694,6 +694,7 @@ class StoreSettings(BaseModel):
     """
 
     display_name: str = Field(default="", max_length=120)
+    logo_url: str = Field(default="", max_length=2000)
     tagline: str = Field(default="", max_length=200)
     about: str = Field(default="", max_length=2000)
     whatsapp: str = Field(default="5521970386065", max_length=20)
@@ -729,6 +730,7 @@ class PublicProduct(BaseModel):
 
 class PublicStoreSettings(BaseModel):
     display_name: str
+    logo_url: str
     tagline: str
     about: str
     whatsapp: str

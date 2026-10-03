@@ -12,6 +12,7 @@ import { AppShell } from "@/components/AppShell";
 
 const EMPTY: StoreSettings = {
   display_name: "",
+  logo_url: "",
   tagline: "",
   about: "",
   whatsapp: DEFAULT_WHATSAPP,
@@ -118,6 +119,22 @@ export default function LojaAdminPage() {
     }
   }
 
+  async function handleLogoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      update({ logo_url: url });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar a logo.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   function moveSlide(index: number, delta: number) {
     const target = index + delta;
     if (target < 0 || target >= settings.slides.length) return;
@@ -207,6 +224,33 @@ export default function LojaAdminPage() {
               {dirty && (
                 <p className="text-xs text-yellow-400">Você tem alterações não salvas — salve para publicá-las.</p>
               )}
+            </Card>
+
+            <Card title="Logo da loja" hint="Aparece no topo da loja pública, ao lado do nome. Use uma imagem quadrada.">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 text-xs text-neutral-600">
+                  {settings.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={settings.logo_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    "Sem logo"
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="cursor-pointer rounded border border-dashed border-neutral-600 px-4 py-2 text-sm text-neutral-300 hover:border-blue-500">
+                    {isUploading ? "Enviando…" : settings.logo_url ? "Trocar logo" : "+ Enviar logo"}
+                    <input type="file" accept="image/*" disabled={isUploading} onChange={handleLogoUpload} className="hidden" />
+                  </label>
+                  {settings.logo_url && (
+                    <button
+                      onClick={() => update({ logo_url: "" })}
+                      className="rounded border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              </div>
             </Card>
 
             <Card title="Capa com slides" hint="Fotos que passam automaticamente no topo da loja (até 10). Sem slides, usamos as fotos dos seus produtos.">

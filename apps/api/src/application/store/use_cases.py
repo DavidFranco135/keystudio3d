@@ -101,6 +101,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
         name=org.name,
         settings=PublicStoreSettings(
             display_name=settings.display_name or org.name,
+            logo_url=settings.logo_url,
             tagline=settings.tagline,
             about=settings.about,
             whatsapp=settings.whatsapp,

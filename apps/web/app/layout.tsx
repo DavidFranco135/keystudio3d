@@ -3,21 +3,27 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
-  title: "3D AI Studio",
-  description: "Copiloto de produção 3D",
+  metadataBase: new URL("https://keystudio3d.pages.dev"),
+  title: "KeyStudio3D",
+  description: "KeyStudio3D — Sua ideia ganha forma.",
   manifest: "/manifest.json",
+  openGraph: {
+    title: "KeyStudio3D",
+    description: "Sua ideia ganha forma.",
+    images: [{ url: "/brand/keystudio3d-logo.png", width: 1000, height: 916 }],
+  },
   icons: {
     icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-32.png?v=2", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png?v=2", sizes: "16x16", type: "image/png" },
+      { url: "/icon-512.png?v=2", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "3D AI Studio",
+    title: "KeyStudio3D",
   },
 };
 

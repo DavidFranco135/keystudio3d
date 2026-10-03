@@ -33,6 +33,11 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
+        <div className="flex flex-col items-center gap-2 pb-2 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/keystudio3d-mark.png" alt="KeyStudio3D" className="h-20 w-20 rounded-2xl" />
+          <p className="text-sm font-semibold tracking-wide text-neutral-300">KeyStudio3D</p>
+        </div>
         <h1 className="text-2xl font-semibold">Criar conta</h1>
         {error && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
         <div className="space-y-1">

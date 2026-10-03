@@ -298,6 +298,13 @@ class CreateOrderRequest(BaseModel):
     customer_id: UUID
     quote_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    due_date: date | None = None
+
+
+class OrderItemBrief(BaseModel):
+    product_id: UUID | None
+    quantity: int
+    unit_price: float | None
 
 
 class OrderResponse(BaseModel):
@@ -305,9 +312,12 @@ class OrderResponse(BaseModel):
     customer_id: UUID
     quote_id: UUID | None
     status: str
+    production_status: str = "todo"
+    due_date: datetime | None = None
     total_amount: float
     notes: str | None
     created_at: datetime
+    items: list[OrderItemBrief] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -315,6 +325,9 @@ class OrderResponse(BaseModel):
 class UpdateOrderRequest(BaseModel):
     customer_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    due_date: date | None = None
+    clear_due_date: bool = False
+    production_status: str | None = Field(default=None, pattern="^(todo|doing|done)$")
 
 
 class TransitionOrderStatusRequest(BaseModel):

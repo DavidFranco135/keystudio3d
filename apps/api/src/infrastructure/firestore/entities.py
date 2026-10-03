@@ -230,6 +230,8 @@ class Order:
     id: uuid.UUID = field(default_factory=_uuid4)
     quote_id: uuid.UUID | None = None
     status: str = "quote"
+    production_status: str = "todo"
+    due_date: datetime | None = None
     total_amount: float = 0
     notes: str | None = None
     created_by: uuid.UUID | None = None

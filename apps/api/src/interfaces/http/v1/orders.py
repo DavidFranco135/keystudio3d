@@ -7,11 +7,13 @@ from src.application.orders import use_cases as order_use_cases
 from src.domain.auth.roles import Role
 from src.domain.shared.exceptions import DomainError
 from src.infrastructure.db.models import User
+from src.infrastructure.repositories import OrderItemRepository
 from src.interfaces.http.dependencies import get_current_user, get_db, require_org_role
 from src.interfaces.http.errors import as_http_exception
 from src.interfaces.http.v1.schemas import (
     CreateOrderItemRequest,
     CreateOrderRequest,
+    OrderItemBrief,
     OrderItemResponse,
     OrderResponse,
     TransitionOrderStatusRequest,
@@ -42,6 +44,7 @@ def create_order(
             quote_id=payload.quote_id,
             notes=payload.notes,
             created_by=current_user.id,
+            due_date=payload.due_date,
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc
@@ -55,7 +58,16 @@ def create_order(
 )
 def list_orders(organization_id: UUID, db: Session = Depends(get_db)) -> list[OrderResponse]:
     orders = order_use_cases.list_orders(db, organization_id=organization_id)
-    return [OrderResponse.model_validate(o) for o in orders]
+    item_repo = OrderItemRepository(db)
+    responses = []
+    for order in orders:
+        response = OrderResponse.model_validate(order)
+        response.items = [
+            OrderItemBrief(product_id=i.product_id, quantity=i.quantity, unit_price=i.unit_price)
+            for i in item_repo.list_for_order(organization_id, order.id)
+        ]
+        responses.append(response)
+    return responses
 
 
 @router.get(
@@ -91,6 +103,9 @@ def update_order(
             order_id=order_id,
             customer_id=payload.customer_id,
             notes=payload.notes,
+            due_date=payload.due_date,
+            clear_due_date=payload.clear_due_date,
+            production_status=payload.production_status,
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc

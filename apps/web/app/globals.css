@@ -20,3 +20,15 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Admin panel: scale everything (rem-based) up on large screens. */
+@media (min-width: 1280px) {
+  html.app-scale {
+    font-size: 17.5px;
+  }
+}
+@media (min-width: 1600px) {
+  html.app-scale {
+    font-size: 19px;
+  }
+}

@@ -6,7 +6,17 @@ import { useAuth } from "@/lib/auth-context";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ORDER_STATUSES } from "@/lib/types";
-import type { CostProfile, Customer, Order, OrderItem, Product, ProductCost } from "@/lib/types";
+import type {
+  CostProfile,
+  Customer,
+  Order,
+  OrderItem,
+  OrderItemBrief,
+  Product,
+  ProductCost,
+  ProductionStatus,
+} from "@/lib/types";
+import { focusStyle } from "@/lib/focus";
 import { AppShell } from "@/components/AppShell";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -138,6 +148,128 @@ function OrderSummary({
   );
 }
 
+type ProdKey = "todo" | "doing" | "done" | "late";
+
+const PROD_LABELS: Record<ProdKey, string> = {
+  todo: "A fazer",
+  doing: "Em andamento",
+  late: "Atrasado",
+  done: "Concluído",
+};
+
+const PROD_TONE: Record<ProdKey, string> = {
+  todo: "bg-neutral-800 text-neutral-200",
+  doing: "bg-sky-950 text-sky-300",
+  late: "bg-red-950 text-red-300",
+  done: "bg-green-950 text-green-300",
+};
+
+const PROD_ACTIVE: Record<ProdKey, string> = {
+  todo: "border-neutral-500 bg-neutral-800 text-white",
+  doing: "border-sky-600 bg-sky-950 text-sky-200",
+  late: "border-red-600 bg-red-950 text-red-200",
+  done: "border-green-600 bg-green-950 text-green-200",
+};
+
+const DAY_MS = 86_400_000;
+
+function localDay(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatDay(iso: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function toInputDate(date: Date): string {
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${mm}-${dd}`;
+}
+
+function addDuration(amount: number, unit: "days" | "weeks" | "months"): string {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  if (unit === "months") date.setMonth(date.getMonth() + amount);
+  else date.setDate(date.getDate() + amount * (unit === "weeks" ? 7 : 1));
+  return toInputDate(date);
+}
+
+function daysUntilDue(order: Order): number | null {
+  if (!order.due_date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((localDay(order.due_date).getTime() - today.getTime()) / DAY_MS);
+}
+
+function effectiveProduction(order: Order): ProdKey {
+  if (order.production_status === "done") return "done";
+  const left = daysUntilDue(order);
+  if (order.status !== "cancelled" && left !== null && left < 0) return "late";
+  return order.production_status;
+}
+
+function dueLabel(order: Order): string | null {
+  const left = daysUntilDue(order);
+  if (left === null || order.production_status === "done") return null;
+  if (left === 0) return "vence hoje";
+  if (left > 0) return `faltam ${left} ${left === 1 ? "dia" : "dias"}`;
+  return `atrasado há ${-left} ${left === -1 ? "dia" : "dias"}`;
+}
+
+function OrderItemsStrip({ items, products }: { items: OrderItemBrief[]; products: Product[] }) {
+  if (items.length === 0) {
+    return <p className="text-xs text-neutral-600">Nenhum produto neste pedido ainda — abra “Detalhes” para adicionar.</p>;
+  }
+  const rows = items.map((item) => ({
+    item,
+    product: products.find((p) => p.id === item.product_id) ?? null,
+  }));
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex shrink-0 -space-x-2">
+        {rows.slice(0, 4).map(({ item, product }, i) => (
+          <div
+            key={i}
+            className="relative h-11 w-11 overflow-hidden rounded-lg border-2 border-neutral-950 bg-neutral-800"
+            title={product?.name ?? "Produto"}
+          >
+            {product?.photo_urls[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={product.photo_urls[0]}
+                alt=""
+                className="h-full w-full object-cover"
+                style={focusStyle(product.photo_focus, product.photo_urls[0])}
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-sm text-neutral-500">
+                {(product?.name ?? "?").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            {item.quantity > 1 && (
+              <span className="absolute bottom-0 right-0 rounded-tl bg-black/75 px-1 text-[10px] font-semibold text-white">
+                {item.quantity}×
+              </span>
+            )}
+          </div>
+        ))}
+        {rows.length > 4 && (
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-neutral-950 bg-neutral-800 text-xs text-neutral-300">
+            +{rows.length - 4}
+          </div>
+        )}
+      </div>
+      <p className="line-clamp-2 min-w-0 text-sm text-neutral-300">
+        {rows.map(({ item, product }) => `${item.quantity}× ${product?.name ?? "Produto"}`).join(" · ")}
+      </p>
+    </div>
+  );
+}
+
 export default function PedidosPage() {
   const { status, accessToken, currentOrganizationId } = useAuth();
   const router = useRouter();
@@ -154,6 +286,11 @@ export default function PedidosPage() {
 
   const [customerId, setCustomerId] = useState("");
   const [notes, setNotes] = useState("");
+  const [dueMode, setDueMode] = useState<"relative" | "date" | "none">("relative");
+  const [dueAmount, setDueAmount] = useState("7");
+  const [dueUnit, setDueUnit] = useState<"days" | "weeks" | "months">("days");
+  const [dueDate, setDueDate] = useState("");
+  const [filter, setFilter] = useState<"all" | ProdKey>("all");
 
   const [itemProductId, setItemProductId] = useState("");
   const [itemQuantity, setItemQuantity] = useState("1");
@@ -165,6 +302,8 @@ export default function PedidosPage() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editCustomerId, setEditCustomerId] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editProduction, setEditProduction] = useState<ProductionStatus>("todo");
   const [isSavingOrderEdit, setIsSavingOrderEdit] = useState(false);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -218,6 +357,32 @@ export default function PedidosPage() {
     return () => clearTimeout(timeoutId);
   }, [status, router, load]);
 
+  const createDueDate =
+    dueMode === "none"
+      ? ""
+      : dueMode === "date"
+        ? dueDate
+        : Number(dueAmount) > 0
+          ? addDuration(Number(dueAmount), dueUnit)
+          : "";
+
+  async function handleSetProduction(order: Order, next: ProductionStatus) {
+    if (!accessToken || order.production_status === next) return;
+    setError(null);
+    const previous = orders;
+    setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, production_status: next } : o)));
+    try {
+      await apiFetch(`${orgPath}/orders/${order.id}`, {
+        method: "PATCH",
+        accessToken,
+        body: JSON.stringify({ production_status: next }),
+      });
+    } catch (err) {
+      setOrders(previous);
+      setError(err instanceof ApiError ? err.message : "Falha ao mudar o status.");
+    }
+  }
+
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     if (!accessToken || !customerId) return;
@@ -227,10 +392,18 @@ export default function PedidosPage() {
       await apiFetch(`${orgPath}/orders`, {
         method: "POST",
         accessToken,
-        body: JSON.stringify({ customer_id: customerId, notes: notes || null }),
+        body: JSON.stringify({
+          customer_id: customerId,
+          notes: notes || null,
+          due_date: createDueDate || null,
+        }),
       });
       setCustomerId("");
       setNotes("");
+      setDueMode("relative");
+      setDueAmount("7");
+      setDueUnit("days");
+      setDueDate("");
       setShowForm(false);
       await load();
     } catch (err) {
@@ -261,6 +434,8 @@ export default function PedidosPage() {
     setEditingOrderId(order.id);
     setEditCustomerId(order.customer_id);
     setEditNotes(order.notes ?? "");
+    setEditDueDate(order.due_date ? order.due_date.slice(0, 10) : "");
+    setEditProduction(order.production_status);
   }
 
   function cancelEditOrder() {
@@ -275,7 +450,12 @@ export default function PedidosPage() {
       await apiFetch(`${orgPath}/orders/${order.id}`, {
         method: "PATCH",
         accessToken,
-        body: JSON.stringify({ customer_id: editCustomerId, notes: editNotes }),
+        body: JSON.stringify({
+          customer_id: editCustomerId,
+          notes: editNotes,
+          production_status: editProduction,
+          ...(editDueDate ? { due_date: editDueDate } : { clear_due_date: true }),
+        }),
       });
       setEditingOrderId(null);
       await load();
@@ -455,6 +635,8 @@ export default function PedidosPage() {
     }
   }
 
+  const visibleOrders = orders.filter((o) => filter === "all" || effectiveProduction(o) === filter);
+
   if (status !== "authenticated") {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -468,8 +650,32 @@ export default function PedidosPage() {
       <div className="mx-auto max-w-5xl space-y-6">
         {error && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
 
+        <div className="flex flex-wrap gap-2">
+          {(["all", "todo", "doing", "late", "done"] as const).map((key) => {
+            const count =
+              key === "all" ? orders.length : orders.filter((o) => effectiveProduction(o) === key).length;
+            const active = filter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition ${
+                  active
+                    ? key === "all"
+                      ? "border-blue-500 bg-blue-950 text-blue-200"
+                      : PROD_ACTIVE[key]
+                    : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                }`}
+              >
+                {key === "all" ? "Todos" : PROD_LABELS[key]}
+                <span className="rounded-full bg-black/30 px-1.5 text-xs">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex items-center justify-between">
-          <p className="text-sm text-neutral-500">{orders.length} pedido(s)</p>
+          <p className="text-sm text-neutral-500">{visibleOrders.length} pedido(s)</p>
           <button
             onClick={() => setShowForm((v) => !v)}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
@@ -490,6 +696,32 @@ export default function PedidosPage() {
               ))}
             </select>
             <input placeholder="Observações (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2" />
+            <div className="space-y-2 sm:col-span-2">
+              <label className="block text-xs text-neutral-500">Prazo de entrega</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={dueMode} onChange={(e) => setDueMode(e.target.value as typeof dueMode)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+                  <option value="relative">Em quanto tempo</option>
+                  <option value="date">Data exata</option>
+                  <option value="none">Sem prazo</option>
+                </select>
+                {dueMode === "relative" && (
+                  <>
+                    <input type="number" min={1} value={dueAmount} onChange={(e) => setDueAmount(e.target.value)} className="w-20 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm" />
+                    <select value={dueUnit} onChange={(e) => setDueUnit(e.target.value as typeof dueUnit)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+                      <option value="days">dia(s)</option>
+                      <option value="weeks">semana(s)</option>
+                      <option value="months">mês(es)</option>
+                    </select>
+                  </>
+                )}
+                {dueMode === "date" && (
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm" />
+                )}
+                <span className="text-xs text-neutral-500">
+                  {createDueDate ? `Entrega até ${formatDay(createDueDate)}` : "Sem data de entrega"}
+                </span>
+              </div>
+            </div>
             {customers.length === 0 && (
               <p className="text-xs text-yellow-300 sm:col-span-2">
                 Nenhum cliente cadastrado ainda — crie um cliente primeiro na aba Clientes.
@@ -504,25 +736,63 @@ export default function PedidosPage() {
         <div className="rounded-xl border border-neutral-800 divide-y divide-neutral-800">
           {isLoading ? (
             <p className="px-4 py-6 text-center text-sm text-neutral-500">Carregando…</p>
-          ) : orders.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-neutral-500">Nenhum pedido ainda.</p>
+          ) : visibleOrders.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-neutral-500">
+              {orders.length === 0 ? "Nenhum pedido ainda." : "Nenhum pedido neste filtro."}
+            </p>
           ) : (
-            orders.map((order) => {
+            visibleOrders.map((order) => {
               const next = nextStatus(order.status);
+              const prod = effectiveProduction(order);
+              const dueText = dueLabel(order);
               return (
                 <div key={order.id} className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{customerName(order.customer_id)}</p>
-                      <p className="text-xs text-neutral-500">{formatDate(order.created_at)}</p>
+                      <p className="text-xs text-neutral-500">Pedido em {formatDate(order.created_at)}</p>
                     </div>
-                    <span className={`shrink-0 rounded px-2 py-0.5 text-xs ${STATUS_TONE[order.status] ?? "bg-neutral-800 text-neutral-300"}`}>
-                      {STATUS_LABELS[order.status] ?? order.status}
-                    </span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${PROD_TONE[prod]}`}>
+                        {PROD_LABELS[prod]}
+                      </span>
+                      <span className={`rounded px-2 py-0.5 text-xs ${STATUS_TONE[order.status] ?? "bg-neutral-800 text-neutral-300"}`}>
+                        {STATUS_LABELS[order.status] ?? order.status}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-neutral-300">
-                    Total: <span className="font-medium text-neutral-100">{formatCurrency(order.total_amount)}</span>
-                  </p>
+                  <OrderItemsStrip items={order.items ?? []} products={products} />
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-neutral-300">
+                    <span>
+                      Total: <span className="font-medium text-neutral-100">{formatCurrency(order.total_amount)}</span>
+                    </span>
+                    {order.due_date ? (
+                      <span className={prod === "late" ? "font-medium text-red-400" : ""}>
+                        Prazo: {formatDay(order.due_date)}
+                        {dueText ? ` · ${dueText}` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-600">Sem prazo</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="mr-1 text-xs text-neutral-500">Situação:</span>
+                    {(["todo", "doing", "done"] as const).map((s) => {
+                      const selected = order.production_status === s;
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => handleSetProduction(order, s)}
+                          aria-pressed={selected}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${
+                            selected ? PROD_ACTIVE[s] : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                          }`}
+                        >
+                          {PROD_LABELS[s]}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-2 text-sm">
                     <button
                       onClick={() => toggleItems(order.id)}
@@ -552,8 +822,8 @@ export default function PedidosPage() {
                   </div>
                   {editingOrderId === order.id && (
                     <div className="rounded border border-neutral-800 bg-neutral-950/80 p-3">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                        <div className="w-full sm:flex-1">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="w-full">
                           <label className="mb-1 block text-xs text-neutral-500">Cliente</label>
                           <select value={editCustomerId} onChange={(e) => setEditCustomerId(e.target.value)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
                             {customers.map((c) => (
@@ -561,11 +831,23 @@ export default function PedidosPage() {
                             ))}
                           </select>
                         </div>
-                        <div className="w-full sm:flex-1">
+                        <div className="w-full">
                           <label className="mb-1 block text-xs text-neutral-500">Observações</label>
                           <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm" />
                         </div>
-                        <div className="flex gap-2">
+                        <div className="w-full">
+                          <label className="mb-1 block text-xs text-neutral-500">Prazo (deixe vazio para sem prazo)</label>
+                          <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm" />
+                        </div>
+                        <div className="w-full">
+                          <label className="mb-1 block text-xs text-neutral-500">Situação</label>
+                          <select value={editProduction} onChange={(e) => setEditProduction(e.target.value as ProductionStatus)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+                            <option value="todo">A fazer</option>
+                            <option value="doing">Em andamento</option>
+                            <option value="done">Concluído</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2 sm:col-span-2">
                           <button onClick={() => handleSaveOrderEdit(order)} disabled={isSavingOrderEdit} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50">
                             {isSavingOrderEdit ? "Salvando…" : "Salvar"}
                           </button>

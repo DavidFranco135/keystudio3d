@@ -425,6 +425,11 @@ class Order(Base):
         Uuid, ForeignKey("quotes.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="quote")
+    # Shop-floor progress, separate from the commercial workflow in `status`:
+    # "todo" (a fazer) | "doing" (em andamento) | "done" (concluido).
+    # "Atrasado" is derived: due_date passed and not done.
+    production_status: Mapped[str] = mapped_column(String(20), nullable=False, default="todo")
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), default=0)
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(

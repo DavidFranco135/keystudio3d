@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -25,6 +26,12 @@ from src.infrastructure.repositories import (
 )
 
 
+def _to_datetime(value: date | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime(value.year, value.month, value.day, tzinfo=UTC)
+
+
 def create_order(
     db: Session,
     *,
@@ -33,6 +40,7 @@ def create_order(
     quote_id: UUID | None,
     notes: str | None,
     created_by: UUID | None,
+    due_date: date | None = None,
 ) -> Order:
     get_customer(db, organization_id=organization_id, customer_id=customer_id)
 
@@ -52,6 +60,7 @@ def create_order(
         total_amount=total_amount,
         notes=notes,
         created_by=created_by,
+        due_date=_to_datetime(due_date),
     )
     db.commit()
     return order
@@ -75,6 +84,9 @@ def update_order(
     order_id: UUID,
     customer_id: UUID | None,
     notes: str | None,
+    due_date: date | None = None,
+    clear_due_date: bool = False,
+    production_status: str | None = None,
 ) -> Order:
     order = get_order(db, organization_id=organization_id, order_id=order_id)
     if customer_id is not None:
@@ -82,6 +94,12 @@ def update_order(
         order.customer_id = customer_id
     if notes is not None:
         order.notes = notes
+    if clear_due_date:
+        order.due_date = None
+    elif due_date is not None:
+        order.due_date = _to_datetime(due_date)
+    if production_status is not None:
+        order.production_status = production_status
     db.commit()
     return order
 
@@ -90,6 +108,21 @@ def delete_order(db: Session, *, organization_id: UUID, order_id: UUID) -> None:
     order = get_order(db, organization_id=organization_id, order_id=order_id)
     OrderRepository(db).soft_delete(order)
     db.commit()
+
+
+_IN_PROGRESS_STATUSES = {"production", "printing", "finishing", "packaging"}
+_FINISHED_STATUSES = {"delivered", "completed"}
+
+
+def _sync_production_status(order: Order, new_status: str) -> None:
+    """Moving the order along the workflow also moves its shop-floor progress,
+
+    so nobody has to update the same order in two places.
+    """
+    if new_status in _FINISHED_STATUSES:
+        order.production_status = "done"
+    elif new_status in _IN_PROGRESS_STATUSES and order.production_status == "todo":
+        order.production_status = "doing"
 
 
 def transition_order_status(
@@ -103,6 +136,7 @@ def transition_order_status(
     order = get_order(db, organization_id=organization_id, order_id=order_id)
     validate_transition(order.status, new_status)
     OrderRepository(db).update_status(order, new_status=new_status)
+    _sync_production_status(order, new_status)
     if new_status == "paid":
         record_order_paid(
             db,

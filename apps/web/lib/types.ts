@@ -150,14 +150,25 @@ export const ORDER_STATUSES = [
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+export type ProductionStatus = "todo" | "doing" | "done";
+
+export type OrderItemBrief = {
+  product_id: string | null;
+  quantity: number;
+  unit_price: number | null;
+};
+
 export type Order = {
   id: string;
   customer_id: string;
   quote_id: string | null;
   status: OrderStatus;
+  production_status: ProductionStatus;
+  due_date: string | null;
   total_amount: number;
   notes: string | null;
   created_at: string;
+  items: OrderItemBrief[];
 };
 
 export type OrderItem = {

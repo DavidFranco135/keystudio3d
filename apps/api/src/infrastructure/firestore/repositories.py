@@ -846,6 +846,7 @@ class OrderRepository:
         total_amount: float,
         notes: str | None,
         created_by: UUID | None,
+        due_date: datetime | None = None,
     ) -> Order:
         order = Order(
             organization_id=organization_id,
@@ -854,6 +855,7 @@ class OrderRepository:
             total_amount=total_amount,
             notes=notes,
             created_by=created_by,
+            due_date=due_date,
         )
         doc_ref = self._collection(organization_id).document(str(order.id))
         doc_ref.set(to_dict(order))

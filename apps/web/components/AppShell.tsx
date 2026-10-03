@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -182,6 +182,13 @@ export function AppShell({ title, children }: { title?: string; children: React.
   const router = useRouter();
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // On big monitors the whole panel scales up (see globals.css) instead of
+  // staying tiny; phones and small laptops are untouched.
+  useEffect(() => {
+    document.documentElement.classList.add("app-scale");
+    return () => document.documentElement.classList.remove("app-scale");
+  }, []);
 
   const currentOrg = organizations.find(
     (m) => m.organization.id === currentOrganizationId

@@ -305,3 +305,78 @@ def test_viewer_cannot_create_order(client: TestClient):
         headers=auth_headers(viewer["access_token"]),
     )
     assert response.status_code == 403
+
+
+def _setup_order(client: TestClient, **extra) -> tuple[str, dict, dict]:
+    owner = register_user(client, organization_name="Atelie", email="owner@atelie.io")
+    headers = auth_headers(owner["access_token"])
+    org_id = _org_id(client, headers)
+    customer = _create_customer(client, org_id, headers)
+    response = client.post(
+        f"/api/v1/organizations/{org_id}/orders",
+        json={"customer_id": customer["id"], **extra},
+        headers=headers,
+    )
+    assert response.status_code == 201, response.text
+    return org_id, headers, response.json()
+
+
+def test_order_starts_as_todo_and_keeps_due_date(client: TestClient):
+    _org, _headers, order = _setup_order(client, due_date="2026-12-24")
+    assert order["production_status"] == "todo"
+    assert order["due_date"].startswith("2026-12-24")
+
+
+def test_update_production_status_and_due_date(client: TestClient):
+    org_id, headers, order = _setup_order(client)
+    url = f"/api/v1/organizations/{org_id}/orders/{order['id']}"
+
+    response = client.patch(
+        url, json={"production_status": "doing", "due_date": "2026-11-01"}, headers=headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["production_status"] == "doing"
+    assert response.json()["due_date"].startswith("2026-11-01")
+
+    response = client.patch(url, json={"clear_due_date": True}, headers=headers)
+    assert response.json()["due_date"] is None
+
+    bad = client.patch(url, json={"production_status": "late"}, headers=headers)
+    assert bad.status_code == 422
+
+
+def test_order_list_includes_item_summaries(client: TestClient):
+    org_id, headers, order = _setup_order(client)
+    product = client.post(
+        f"/api/v1/organizations/{org_id}/products",
+        json={"name": "Chaveiro", "manual_price": 10, "materials": []},
+        headers=headers,
+    ).json()
+    added = client.post(
+        f"/api/v1/organizations/{org_id}/orders/{order['id']}/items",
+        json={"product_id": product["id"], "quantity": 3, "unit_price": 10},
+        headers=headers,
+    )
+    assert added.status_code == 201, added.text
+
+    listed = client.get(f"/api/v1/organizations/{org_id}/orders", headers=headers).json()
+    assert listed[0]["items"] == [
+        {"product_id": product["id"], "quantity": 3, "unit_price": 10.0}
+    ]
+
+
+def test_workflow_transition_moves_production_status(client: TestClient):
+    org_id, headers, order = _setup_order(client)
+    url = f"/api/v1/organizations/{org_id}/orders/{order['id']}"
+    for step, expected in (
+        ("order", "todo"),
+        ("paid", "todo"),
+        ("production", "doing"),
+        ("printing", "doing"),
+        ("finishing", "doing"),
+        ("packaging", "doing"),
+        ("delivered", "done"),
+    ):
+        response = client.post(f"{url}/transition", json={"status": step}, headers=headers)
+        assert response.status_code == 200, (step, response.text)
+        assert response.json()["production_status"] == expected, step

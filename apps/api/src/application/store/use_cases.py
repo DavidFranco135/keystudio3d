@@ -88,6 +88,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
                 description=product.description,
                 size=product.size,
                 photo_urls=list(product.photo_urls or []),
+                photo_focus=list(product.photo_focus or []),
                 price=round(float(price), 2),
                 stock_quantity=stock,
                 available=stock is None or stock > 0,

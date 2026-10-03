@@ -242,6 +242,8 @@ class Product(Base):
     photo_urls: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     # None = estoque não controlado (sempre disponível); 0 = esgotado.
     stock_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # [{url, x, y}] - where (0-100%) each photo is anchored when cropped to a card.
+    photo_focus: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

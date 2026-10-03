@@ -7,6 +7,9 @@ import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CostProfile, Product, ProductCostItem } from "@/lib/types";
 import { AppShell } from "@/components/AppShell";
+import { PhotoFramer } from "@/components/PhotoFramer";
+import { focusFor, focusStyle } from "@/lib/focus";
+import { useOverlayHistory } from "@/lib/use-overlay-history";
 
 export default function CatalogoPage() {
   const { status, accessToken, currentOrganizationId } = useAuth();
@@ -21,6 +24,8 @@ export default function CatalogoPage() {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [framing, setFraming] = useState(false);
+  const [isSavingFrame, setIsSavingFrame] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +76,9 @@ export default function CatalogoPage() {
 
   const viewingProduct = products.find((p) => p.id === viewingId) ?? null;
 
+  // Back (browser/phone) closes the photo viewer instead of leaving the page.
+  useOverlayHistory(viewingId !== null, closeViewer);
+
   function openViewer(product: Product) {
     setViewingId(product.id);
     setPhotoIndex(0);
@@ -105,14 +113,37 @@ export default function CatalogoPage() {
     else showNextPhoto();
   }
 
-  async function patchPhotoUrls(product: Product, photoUrls: string[]) {
+  async function patchProduct(product: Product, body: Record<string, unknown>) {
     if (!accessToken) return;
     const updated = await apiFetch<Product>(`${orgPath}/products/${product.id}`, {
       method: "PATCH",
       accessToken,
-      body: JSON.stringify({ photo_urls: photoUrls }),
+      body: JSON.stringify(body),
     });
     setProducts((items) => items.map((p) => (p.id === updated.id ? updated : p)));
+  }
+
+  function patchPhotoUrls(product: Product, photoUrls: string[]) {
+    return patchProduct(product, { photo_urls: photoUrls });
+  }
+
+  async function handleSaveFrame(pos: { x: number; y: number }) {
+    if (!viewingProduct) return;
+    const url = viewingProduct.photo_urls[photoIndex];
+    if (!url) return;
+    setIsSavingFrame(true);
+    setModalError(null);
+    try {
+      const others = viewingProduct.photo_focus.filter(
+        (f) => f.url !== url && viewingProduct.photo_urls.includes(f.url)
+      );
+      await patchProduct(viewingProduct, { photo_focus: [...others, { url, ...pos }] });
+      setFraming(false);
+    } catch (err) {
+      setModalError(err instanceof ApiError ? err.message : "Falha ao salvar enquadramento.");
+    } finally {
+      setIsSavingFrame(false);
+    }
   }
 
   async function handleAddPhoto(event: React.ChangeEvent<HTMLInputElement>) {
@@ -205,6 +236,7 @@ export default function CatalogoPage() {
                         src={product.photo_urls[0]}
                         alt={product.name}
                         className="h-full w-full object-cover"
+                        style={focusStyle(product.photo_focus, product.photo_urls[0])}
                       />
                     ) : (
                       <span className="text-xs text-neutral-600">Sem foto</span>
@@ -341,6 +373,13 @@ export default function CatalogoPage() {
                   {isUploadingPhoto ? "Enviando…" : "Editar (adicionar foto)"}
                 </button>
                 <button
+                  onClick={() => setFraming(true)}
+                  disabled={viewingProduct.photo_urls.length === 0}
+                  className="rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
+                >
+                  Enquadrar na grade
+                </button>
+                <button
                   onClick={handleSetCover}
                   disabled={viewingProduct.photo_urls.length < 2 || photoIndex === 0}
                   className="rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
@@ -358,6 +397,16 @@ export default function CatalogoPage() {
             </div>
           </div>
         </div>
+      )}
+      {framing && viewingProduct && viewingProduct.photo_urls[photoIndex] && (
+        <PhotoFramer
+          key={viewingProduct.photo_urls[photoIndex]}
+          url={viewingProduct.photo_urls[photoIndex]}
+          initial={focusFor(viewingProduct.photo_focus, viewingProduct.photo_urls[photoIndex])}
+          saving={isSavingFrame}
+          onCancel={() => setFraming(false)}
+          onSave={handleSaveFrame}
+        />
       )}
     </AppShell>
   );

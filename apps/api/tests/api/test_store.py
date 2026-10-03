@@ -98,3 +98,27 @@ def test_store_settings_require_membership(client: TestClient):
         headers=auth_headers(other["access_token"]),
     )
     assert response.status_code in (401, 403, 404)
+
+
+def test_photo_focus_is_saved_and_exposed_publicly(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    product = _product(client, org_id, headers, photo_urls=["https://img/a.jpg"])
+    focus = [{"url": "https://img/a.jpg", "x": 30.5, "y": 80}]
+
+    response = client.patch(
+        f"/api/v1/organizations/{org_id}/products/{product['id']}",
+        json={"photo_focus": focus},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["photo_focus"] == [{"url": "https://img/a.jpg", "x": 30.5, "y": 80.0}]
+
+    store = client.get(f"/api/v1/public/stores/{slug}").json()
+    assert store["products"][0]["photo_focus"][0]["y"] == 80.0
+
+    bad = client.patch(
+        f"/api/v1/organizations/{org_id}/products/{product['id']}",
+        json={"photo_focus": [{"url": "u", "x": 120, "y": 0}]},
+        headers=headers,
+    )
+    assert bad.status_code == 422

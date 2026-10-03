@@ -406,6 +406,12 @@ class ProductMaterialInput(BaseModel):
     quantity_g: float = Field(gt=0)
 
 
+class PhotoFocus(BaseModel):
+    url: str = Field(max_length=2000)
+    x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=100)
+
+
 class CreateProductRequest(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
@@ -426,6 +432,7 @@ class UpdateProductRequest(BaseModel):
     manual_price: float | None = Field(default=None, ge=0)
     size: str | None = Field(default=None, max_length=100)
     photo_urls: list[str] | None = None
+    photo_focus: list[PhotoFocus] | None = None
     stock_quantity: int | None = Field(default=None, ge=0)
     materials: list[ProductMaterialInput] | None = None
 
@@ -444,6 +451,7 @@ class ProductResponse(BaseModel):
     manual_price: float | None
     size: str | None
     photo_urls: list[str] = Field(default_factory=list)
+    photo_focus: list[PhotoFocus] = Field(default_factory=list)
     stock_quantity: int | None
     is_active: bool
     created_at: datetime
@@ -712,6 +720,7 @@ class PublicProduct(BaseModel):
     description: str | None
     size: str | None
     photo_urls: list[str]
+    photo_focus: list[PhotoFocus]
     price: float
     stock_quantity: int | None
     available: bool

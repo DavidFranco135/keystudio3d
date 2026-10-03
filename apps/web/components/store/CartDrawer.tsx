@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import type { OrderLine } from "@/lib/store";
 import { buildOrderMessage, whatsappLink } from "@/lib/store";
 import { formatCurrency } from "@/lib/format";
+import { focusStyle } from "@/lib/focus";
+import { useOverlayHistory } from "@/lib/use-overlay-history";
 import { IconClose, IconMinus, IconPlus, IconTrash, IconWhatsapp } from "./ui";
 
 export type CustomerInfo = { name: string; extra: string };
@@ -37,6 +39,8 @@ export function CartDrawer({
   onBrowse: () => void;
   onSent: () => void;
 }) {
+  useOverlayHistory(open, onClose);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -112,7 +116,12 @@ export function CartDrawer({
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[var(--accent-soft)]">
                       {product.photo_urls[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.photo_urls[0]} alt="" className="h-full w-full object-cover" />
+                        <img
+                          src={product.photo_urls[0]}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          style={focusStyle(product.photo_focus, product.photo_urls[0])}
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--accent)] opacity-40">
                           {product.name.slice(0, 1)}

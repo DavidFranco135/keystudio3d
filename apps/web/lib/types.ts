@@ -277,6 +277,8 @@ export type ProductMaterialLine = {
   quantity_g: number;
 };
 
+export type PhotoFocus = { url: string; x: number; y: number };
+
 export type Product = {
   id: string;
   name: string;
@@ -286,6 +288,7 @@ export type Product = {
   manual_price: number | null;
   size: string | null;
   photo_urls: string[];
+  photo_focus: PhotoFocus[];
   stock_quantity: number | null;
   is_active: boolean;
   created_at: string;

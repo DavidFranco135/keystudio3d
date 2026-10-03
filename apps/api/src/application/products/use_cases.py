@@ -102,6 +102,7 @@ def update_product(
     manual_price: float | None = None,
     size: str | None = None,
     photo_urls: list[str] | None = None,
+    photo_focus: list[dict] | None = None,
     stock_quantity: int | None = None,
     materials: list[dict] | None,
 ) -> Product:
@@ -128,6 +129,8 @@ def update_product(
         product.size = size
     if photo_urls is not None:
         product.photo_urls = photo_urls
+    if photo_focus is not None:
+        product.photo_focus = photo_focus
     if stock_quantity is not None:
         product.stock_quantity = stock_quantity
     if materials is not None:

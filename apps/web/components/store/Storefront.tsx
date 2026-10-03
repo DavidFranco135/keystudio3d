@@ -248,16 +248,37 @@ export function Storefront({ slug }: { slug: string }) {
     [setLines, productsById]
   );
 
+  const tabRef = useRef(0);
+  useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
+
   const goTab = useCallback(
     (next: number) => {
       const clamped = Math.max(0, Math.min(TABS.length - 1, next));
       if (clamped === tab) return;
       setDir(clamped > tab ? 1 : -1);
       setTab(clamped);
+      // One history entry per tab, so "back" returns to the previous tab
+      // instead of leaving the store.
+      window.history.pushState({ tab: clamped }, "");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
     [tab]
   );
+
+  useEffect(() => {
+    const onPop = (event: PopStateEvent) => {
+      if (event.state?.overlay) return;
+      const target = typeof event.state?.tab === "number" ? event.state.tab : 0;
+      if (target === tabRef.current) return;
+      setDir(target > tabRef.current ? 1 : -1);
+      setTab(target);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const swipe = useSwipe(
     () => goTab(tab + 1),

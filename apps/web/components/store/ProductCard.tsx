@@ -2,6 +2,7 @@
 
 import type { PublicProduct } from "@/lib/store";
 import { formatCurrency } from "@/lib/format";
+import { focusStyle } from "@/lib/focus";
 import { IconMinus, IconPlus } from "./ui";
 
 export function ProductCard({
@@ -32,6 +33,7 @@ export function ProductCard({
             src={cover}
             alt={product.name}
             loading="lazy"
+            style={focusStyle(product.photo_focus, cover)}
             className={`h-full w-full object-cover transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.07] ${
               product.available ? "" : "grayscale"
             }`}

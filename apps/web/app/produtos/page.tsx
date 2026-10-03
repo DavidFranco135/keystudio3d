@@ -7,6 +7,7 @@ import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostItem } from "@/lib/types";
 import { AppShell } from "@/components/AppShell";
+import { focusStyle } from "@/lib/focus";
 
 type BomLine = { material_id: string; quantity_g: string };
 
@@ -421,7 +422,12 @@ export default function ProdutosPage() {
                     <div className="flex min-w-0 gap-3">
                       {product.photo_urls.length > 0 && (
                         <div className="relative shrink-0">
-                          <img src={product.photo_urls[0]} alt="" className="h-14 w-14 rounded object-cover" />
+                          <img
+                            src={product.photo_urls[0]}
+                            alt=""
+                            className="h-14 w-14 rounded object-cover"
+                            style={focusStyle(product.photo_focus, product.photo_urls[0])}
+                          />
                           {product.photo_urls.length > 1 && (
                             <span className="absolute -right-1 -top-1 rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
                               +{product.photo_urls.length - 1}

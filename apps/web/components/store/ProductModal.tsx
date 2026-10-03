@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { CartLine, PublicProduct } from "@/lib/store";
 import { whatsappLink } from "@/lib/store";
 import { formatCurrency } from "@/lib/format";
+import { focusStyle } from "@/lib/focus";
+import { useOverlayHistory } from "@/lib/use-overlay-history";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -34,6 +36,9 @@ export function ProductModal({
   const [note, setNote] = useState(line?.note ?? "");
   const photos = product.photo_urls;
   const maxQty = product.stock_quantity ?? 99;
+
+  // Back closes the dialog instead of leaving the page.
+  useOverlayHistory(true, onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -86,6 +91,7 @@ export function ProductModal({
                   key={src}
                   src={src}
                   alt={`${product.name} - foto ${i + 1}`}
+                  style={focusStyle(product.photo_focus, src)}
                   className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     i === photo ? "scale-100 opacity-100" : "scale-105 opacity-0"
                   }`}

@@ -25,6 +25,7 @@ export type PublicProduct = {
   description: string | null;
   size: string | null;
   photo_urls: string[];
+  photo_focus: { url: string; x: number; y: number }[];
   price: number;
   stock_quantity: number | null;
   available: boolean;

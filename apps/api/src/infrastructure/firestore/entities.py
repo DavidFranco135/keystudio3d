@@ -146,6 +146,7 @@ class Product:
     size: str | None = None
     photo_urls: list[str] = field(default_factory=list)
     stock_quantity: int | None = None
+    photo_focus: list = field(default_factory=list)
     is_active: bool = True
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)

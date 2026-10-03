@@ -367,6 +367,37 @@ def restore_quote_prices(
     return {"updated": updated}
 
 
+@router.post("/migrate-firestore/rename-org")
+def rename_org(
+    organization_id: str,
+    name: str,
+    slug: str,
+    x_migration_secret: str | None = Header(default=None),
+) -> dict:
+    """Renames an organization and its public store address.
+
+    The previous slug's index entry is deliberately left in place, so links
+    already shared with the old address keep opening the same store.
+    """
+    from src.application.store import use_cases as store_use_cases
+
+    _require_secret(x_migration_secret)
+    client = get_firestore_client()
+    org_ref = client.collection("organizations").document(organization_id)
+    if not org_ref.get().exists:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+
+    index_ref = client.collection("slug_index").document(slug)
+    existing = index_ref.get()
+    if existing.exists and existing.to_dict().get("organization_id") != organization_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Slug already in use")
+
+    org_ref.update({"name": name, "slug": slug, "updated_at": datetime.now(UTC)})
+    index_ref.set({"organization_id": organization_id})
+    store_use_cases._public_cache.clear()
+    return {"organization_id": organization_id, "name": name, "slug": slug}
+
+
 @router.get("/migrate-firestore/verify")
 def verify_firestore(
     x_migration_secret: str | None = Header(default=None),

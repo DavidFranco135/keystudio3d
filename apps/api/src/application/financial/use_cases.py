@@ -132,6 +132,13 @@ def get_financial_summary(
     )
 
 
+def order_has_paid_revenue(db: Session, *, organization_id: UUID, order_id: UUID) -> bool:
+    return any(
+        t.reference_order_id == order_id and t.category == "pedido"
+        for t in FinancialTransactionRepository(db).list_for_org(organization_id, type="receita")
+    )
+
+
 def record_order_paid(
     db: Session, *, organization_id: UUID, order_id: UUID, amount: float, created_by: UUID | None
 ) -> FinancialTransaction:

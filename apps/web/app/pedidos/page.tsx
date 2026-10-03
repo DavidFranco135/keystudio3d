@@ -12,6 +12,7 @@ import type {
   Order,
   OrderItem,
   OrderItemBrief,
+  OrderStatus,
   Product,
   ProductCost,
   ProductionStatus,
@@ -286,6 +287,7 @@ export default function PedidosPage() {
 
   const [customerId, setCustomerId] = useState("");
   const [notes, setNotes] = useState("");
+  const [newStatus, setNewStatus] = useState<OrderStatus>("quote");
   const [dueMode, setDueMode] = useState<"relative" | "date" | "none">("relative");
   const [dueAmount, setDueAmount] = useState("7");
   const [dueUnit, setDueUnit] = useState<"days" | "weeks" | "months">("days");
@@ -304,6 +306,7 @@ export default function PedidosPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
   const [editProduction, setEditProduction] = useState<ProductionStatus>("todo");
+  const [editStatus, setEditStatus] = useState<OrderStatus>("quote");
   const [isSavingOrderEdit, setIsSavingOrderEdit] = useState(false);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -396,10 +399,12 @@ export default function PedidosPage() {
           customer_id: customerId,
           notes: notes || null,
           due_date: createDueDate || null,
+          status: newStatus,
         }),
       });
       setCustomerId("");
       setNotes("");
+      setNewStatus("quote");
       setDueMode("relative");
       setDueAmount("7");
       setDueUnit("days");
@@ -436,6 +441,7 @@ export default function PedidosPage() {
     setEditNotes(order.notes ?? "");
     setEditDueDate(order.due_date ? order.due_date.slice(0, 10) : "");
     setEditProduction(order.production_status);
+    setEditStatus(order.status);
   }
 
   function cancelEditOrder() {
@@ -453,7 +459,10 @@ export default function PedidosPage() {
         body: JSON.stringify({
           customer_id: editCustomerId,
           notes: editNotes,
-          production_status: editProduction,
+          // Só manda o que mudou: trocar o status já ajusta a situação no
+          // servidor, e reenviar a situação antiga desfaria esse ajuste.
+          ...(editStatus !== order.status ? { status: editStatus } : {}),
+          ...(editProduction !== order.production_status ? { production_status: editProduction } : {}),
           ...(editDueDate ? { due_date: editDueDate } : { clear_due_date: true }),
         }),
       });
@@ -696,6 +705,14 @@ export default function PedidosPage() {
               ))}
             </select>
             <input placeholder="Observações (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2" />
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs text-neutral-500">Status do pedido</label>
+              <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as OrderStatus)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm sm:w-auto">
+                {ORDER_STATUSES.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-2 sm:col-span-2">
               <label className="block text-xs text-neutral-500">Prazo de entrega</label>
               <div className="flex flex-wrap items-center gap-2">
@@ -838,6 +855,14 @@ export default function PedidosPage() {
                         <div className="w-full">
                           <label className="mb-1 block text-xs text-neutral-500">Prazo (deixe vazio para sem prazo)</label>
                           <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm" />
+                        </div>
+                        <div className="w-full">
+                          <label className="mb-1 block text-xs text-neutral-500">Status do pedido</label>
+                          <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as OrderStatus)} className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+                            {ORDER_STATUSES.map((s) => (
+                              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                            ))}
+                          </select>
                         </div>
                         <div className="w-full">
                           <label className="mb-1 block text-xs text-neutral-500">Situação</label>

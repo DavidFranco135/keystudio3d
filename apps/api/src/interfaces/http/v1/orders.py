@@ -45,6 +45,7 @@ def create_order(
             notes=payload.notes,
             created_by=current_user.id,
             due_date=payload.due_date,
+            status=payload.status,
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc
@@ -94,6 +95,7 @@ def update_order(
     organization_id: UUID,
     order_id: UUID,
     payload: UpdateOrderRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> OrderResponse:
     try:
@@ -106,6 +108,8 @@ def update_order(
             due_date=payload.due_date,
             clear_due_date=payload.clear_due_date,
             production_status=payload.production_status,
+            status=payload.status,
+            triggered_by=current_user.id,
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc

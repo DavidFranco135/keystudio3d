@@ -294,11 +294,17 @@ class QuoteResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+_ORDER_STATUS_PATTERN = (
+    "^(quote|order|paid|production|printing|finishing|packaging|delivered|completed|cancelled)$"
+)
+
+
 class CreateOrderRequest(BaseModel):
     customer_id: UUID
     quote_id: UUID | None = None
     notes: str | None = Field(default=None, max_length=2000)
     due_date: date | None = None
+    status: str | None = Field(default=None, pattern=_ORDER_STATUS_PATTERN)
 
 
 class OrderItemBrief(BaseModel):
@@ -328,13 +334,11 @@ class UpdateOrderRequest(BaseModel):
     due_date: date | None = None
     clear_due_date: bool = False
     production_status: str | None = Field(default=None, pattern="^(todo|doing|done)$")
+    status: str | None = Field(default=None, pattern=_ORDER_STATUS_PATTERN)
 
 
 class TransitionOrderStatusRequest(BaseModel):
-    status: str = Field(
-        pattern="^(quote|order|paid|production|printing|finishing|packaging|delivered"
-        "|completed|cancelled)$"
-    )
+    status: str = Field(pattern=_ORDER_STATUS_PATTERN)
 
 
 class CreateOrderItemRequest(BaseModel):
@@ -700,6 +704,17 @@ class StoreHighlight(BaseModel):
     text: str = Field(default="", max_length=240)
 
 
+class StoreCategory(BaseModel):
+    """Categoria da vitrine: criada e renomeada pelo lojista, guarda os ids
+
+    dos produtos que pertencem a ela (um produto pode estar em várias).
+    """
+
+    id: str = Field(min_length=1, max_length=40)
+    name: str = Field(default="", max_length=60)
+    product_ids: list[str] = Field(default_factory=list)
+
+
 class StoreSettings(BaseModel):
     """Everything the shop owner manages for the public storefront; stored
 
@@ -720,6 +735,7 @@ class StoreSettings(BaseModel):
     highlights: list[StoreHighlight] = Field(default_factory=list, max_length=3)
     hidden_product_ids: list[str] = Field(default_factory=list)
     featured_product_ids: list[str] = Field(default_factory=list)
+    categories: list[StoreCategory] = Field(default_factory=list, max_length=30)
 
 
 class StoreAdminResponse(BaseModel):
@@ -739,6 +755,12 @@ class PublicProduct(BaseModel):
     stock_quantity: int | None
     available: bool
     featured: bool
+    category_ids: list[str] = Field(default_factory=list)
+
+
+class PublicCategory(BaseModel):
+    id: str
+    name: str
 
 
 class PublicStoreSettings(BaseModel):
@@ -754,6 +776,7 @@ class PublicStoreSettings(BaseModel):
     theme: str
     slides: list[StoreSlide]
     highlights: list[StoreHighlight]
+    categories: list[PublicCategory] = Field(default_factory=list)
 
 
 class PublicStoreResponse(BaseModel):

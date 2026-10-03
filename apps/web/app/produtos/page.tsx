@@ -6,10 +6,28 @@ import { useAuth } from "@/lib/auth-context";
 import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostItem } from "@/lib/types";
+import type { StoreAdminResponse, StoreCategory, StoreSettings } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import { focusStyle } from "@/lib/focus";
 
 type BomLine = { material_id: string; quantity_g: string };
+
+function newCategoryId(): string {
+  return `cat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// Coloca/tira o produto de cada categoria conforme a seleção do formulário.
+function assignProduct(categories: StoreCategory[], productId: string, selected: string[]): StoreCategory[] {
+  return categories.map((c) => {
+    const has = c.product_ids.includes(productId);
+    const wants = selected.includes(c.id);
+    if (has === wants) return c;
+    return {
+      ...c,
+      product_ids: wants ? [...c.product_ids, productId] : c.product_ids.filter((id) => id !== productId),
+    };
+  });
+}
 
 export default function ProdutosPage() {
   const { status, accessToken, currentOrganizationId } = useAuth();
@@ -36,6 +54,16 @@ export default function ProdutosPage() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("");
+  const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
+
+  // As categorias moram nas configurações da loja (mesmo lugar de destaque/oculto).
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [showCategories, setShowCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isSavingCategories, setIsSavingCategories] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
 
@@ -48,13 +76,15 @@ export default function ProdutosPage() {
     if (!accessToken || !currentOrganizationId) return;
     setIsLoading(true);
     try {
-      const [productsData, materialsData, machinesData, profilesData] = await Promise.all([
+      const [productsData, materialsData, machinesData, profilesData, store] = await Promise.all([
         apiFetch<Product[]>(`${orgPath}/products`, { accessToken }),
         apiFetch<Material[]>(`${orgPath}/materials`, { accessToken }),
         apiFetch<Machine[]>(`${orgPath}/machines`, { accessToken }),
         apiFetch<CostProfile[]>(`${orgPath}/cost-profiles`, { accessToken }),
+        apiFetch<StoreAdminResponse>(`${orgPath}/store`, { accessToken }).catch(() => null),
       ]);
       setProducts(productsData);
+      setStoreSettings(store ? { ...store.settings, categories: store.settings.categories ?? [] } : null);
       setMaterials(materialsData);
       setMachines(machinesData);
       setCostProfiles(profilesData);
@@ -100,6 +130,56 @@ export default function ProdutosPage() {
     setBomLines((lines) => lines.filter((_, i) => i !== index));
   }
 
+  const categories = storeSettings?.categories ?? [];
+
+  async function saveCategories(next: StoreCategory[]): Promise<boolean> {
+    if (!accessToken || !storeSettings) return false;
+    setIsSavingCategories(true);
+    setError(null);
+    try {
+      const saved = await apiFetch<StoreAdminResponse>(`${orgPath}/store`, {
+        method: "PUT",
+        accessToken,
+        body: JSON.stringify({ ...storeSettings, categories: next }),
+      });
+      setStoreSettings({ ...saved.settings, categories: saved.settings.categories ?? [] });
+      return true;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao salvar categorias.");
+      return false;
+    } finally {
+      setIsSavingCategories(false);
+    }
+  }
+
+  async function handleAddCategory(event: React.FormEvent) {
+    event.preventDefault();
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (await saveCategories([...categories, { id: newCategoryId(), name, product_ids: [] }])) {
+      setNewCategoryName("");
+    }
+  }
+
+  async function handleRenameCategory(id: string) {
+    const name = renameValue.trim();
+    if (!name) return;
+    if (await saveCategories(categories.map((c) => (c.id === id ? { ...c, name } : c)))) {
+      setRenamingId(null);
+    }
+  }
+
+  async function handleDeleteCategory(category: StoreCategory) {
+    if (!window.confirm(`Apagar a categoria "${category.name}"? Os produtos não são apagados.`)) return;
+    if (await saveCategories(categories.filter((c) => c.id !== category.id))) {
+      if (categoryFilter === category.id) setCategoryFilter(null);
+    }
+  }
+
+  function toggleFormCategory(id: string) {
+    setFormCategoryIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
+
   function resetForm() {
     setName("");
     setDescription("");
@@ -110,6 +190,7 @@ export default function ProdutosPage() {
     setSize("");
     setPhotoUrls([]);
     setStockQuantity("");
+    setFormCategoryIds([]);
     setMode("completo");
     setEditingId(null);
     setShowForm(false);
@@ -159,6 +240,7 @@ export default function ProdutosPage() {
     setSize(product.size ?? "");
     setPhotoUrls(product.photo_urls ?? []);
     setStockQuantity(product.stock_quantity != null ? String(product.stock_quantity) : "");
+    setFormCategoryIds(categories.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id));
     setMode(product.manual_price != null ? "simples" : "completo");
     setShowForm(true);
   }
@@ -184,10 +266,16 @@ export default function ProdutosPage() {
           quantity_g: Number(l.quantity_g),
         })),
       });
+      let productId = editingId;
       if (editingId) {
         await apiFetch(`${orgPath}/products/${editingId}`, { method: "PATCH", accessToken, body });
       } else {
-        await apiFetch(`${orgPath}/products`, { method: "POST", accessToken, body });
+        const created = await apiFetch<Product>(`${orgPath}/products`, { method: "POST", accessToken, body });
+        productId = created.id;
+      }
+      if (productId && storeSettings) {
+        const next = assignProduct(categories, productId, formCategoryIds);
+        if (next.some((c, i) => c !== categories[i])) await saveCategories(next);
       }
       resetForm();
       await load();
@@ -233,6 +321,129 @@ export default function ProdutosPage() {
           <p className="rounded-lg border border-yellow-800 bg-yellow-950/40 px-4 py-3 text-sm text-yellow-300">
             Cadastre um perfil de custo na aba Precificação (Perfil de custo) para ver o custo/preço calculado aqui.
           </p>
+        )}
+
+        {storeSettings && (
+          <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-medium">Categorias</h2>
+                <p className="text-xs text-neutral-500">
+                  Aparecem na loja pública. Para colocar um produto numa categoria, use “Editar” no produto.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCategories((v) => !v)}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm hover:border-neutral-500"
+              >
+                {showCategories ? "Fechar" : "Criar / editar categorias"}
+              </button>
+            </div>
+
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {[{ id: null as string | null, name: "Todos", count: products.length }, ...categories.map((c) => ({
+                  id: c.id as string | null,
+                  name: c.name,
+                  count: products.filter((p) => c.product_ids.includes(p.id)).length,
+                }))].map((c) => (
+                  <button
+                    key={c.id ?? "all"}
+                    onClick={() => setCategoryFilter(c.id)}
+                    aria-pressed={categoryFilter === c.id}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      categoryFilter === c.id
+                        ? "border-blue-500 bg-blue-950 text-blue-200"
+                        : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                    }`}
+                  >
+                    {c.name} <span className="opacity-60">{c.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showCategories && (
+              <div className="space-y-3 border-t border-neutral-800 pt-3">
+                <form onSubmit={handleAddCategory} className="flex gap-2">
+                  <input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Nova categoria (ex.: Chaveiros)"
+                    maxLength={60}
+                    className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingCategories || !newCategoryName.trim() || categories.length >= 30}
+                    className="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
+                  >
+                    + Criar
+                  </button>
+                </form>
+                {categories.length === 0 ? (
+                  <p className="text-sm text-neutral-500">Nenhuma categoria ainda.</p>
+                ) : (
+                  <ul className="divide-y divide-neutral-800">
+                    {categories.map((c) => (
+                      <li key={c.id} className="flex flex-wrap items-center gap-2 py-2">
+                        {renamingId === c.id ? (
+                          <>
+                            <input
+                              autoFocus
+                              value={renameValue}
+                              maxLength={60}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRenameCategory(c.id);
+                                if (e.key === "Escape") setRenamingId(null);
+                              }}
+                              className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm"
+                            />
+                            <button
+                              onClick={() => handleRenameCategory(c.id)}
+                              disabled={isSavingCategories || !renameValue.trim()}
+                              className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                            >
+                              Salvar
+                            </button>
+                            <button onClick={() => setRenamingId(null)} className="px-2 text-xs text-neutral-400 hover:underline">
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                              {c.name}{" "}
+                              <span className="text-xs text-neutral-500">
+                                · {products.filter((p) => c.product_ids.includes(p.id)).length} produto(s)
+                              </span>
+                            </span>
+                            <button
+                              onClick={() => {
+                                setRenamingId(c.id);
+                                setRenameValue(c.name);
+                              }}
+                              className="text-xs text-blue-400 hover:underline"
+                            >
+                              Renomear
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(c)}
+                              disabled={isSavingCategories}
+                              className="text-xs text-red-400 hover:underline disabled:opacity-50"
+                            >
+                              Apagar
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
         )}
 
         <div className="flex items-center justify-between">
@@ -313,6 +524,39 @@ export default function ProdutosPage() {
                 Deixe em branco para não controlar estoque (sempre disponível).
               </p>
             </div>
+
+            {storeSettings && (
+              <div className="space-y-1.5">
+                <label className="block text-xs text-neutral-500">Categorias (pode marcar mais de uma)</label>
+                {categories.length === 0 ? (
+                  <p className="text-xs text-neutral-600">
+                    Nenhuma categoria criada — use “Criar / editar categorias” acima.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {categories.map((c) => {
+                      const on = formCategoryIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleFormCategory(c.id)}
+                          aria-pressed={on}
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            on
+                              ? "border-blue-500 bg-blue-950 text-blue-200"
+                              : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                          }`}
+                        >
+                          {on ? "✓ " : ""}
+                          {c.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="block text-xs text-neutral-500">Fotos do produto (opcional, pode selecionar várias)</label>
@@ -413,7 +657,13 @@ export default function ProdutosPage() {
           ) : products.length === 0 ? (
             <p className="text-neutral-500">Nenhum produto cadastrado ainda.</p>
           ) : (
-            products.map((product) => {
+            products
+              .filter(
+                (product) =>
+                  !categoryFilter ||
+                  categories.some((c) => c.id === categoryFilter && c.product_ids.includes(product.id))
+              )
+              .map((product) => {
               const cost = costs[product.id];
               const isManual = product.manual_price != null;
               return (
@@ -464,6 +714,18 @@ export default function ProdutosPage() {
                       )}
                     </div>
                   </div>
+
+                  {categories.some((c) => c.product_ids.includes(product.id)) && (
+                    <div className="flex flex-wrap gap-1">
+                      {categories
+                        .filter((c) => c.product_ids.includes(product.id))
+                        .map((c) => (
+                          <span key={c.id} className="rounded-full bg-blue-950/60 px-2 py-0.5 text-[11px] text-blue-300">
+                            {c.name}
+                          </span>
+                        ))}
+                    </div>
+                  )}
 
                   {product.materials.length > 0 && (
                     <ul className="text-xs text-neutral-400">

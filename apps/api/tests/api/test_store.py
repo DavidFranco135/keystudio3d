@@ -122,3 +122,32 @@ def test_photo_focus_is_saved_and_exposed_publicly(client: TestClient):
         headers=headers,
     )
     assert bad.status_code == 422
+
+
+def test_categories_are_saved_and_exposed_publicly(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    vaso = _product(client, org_id, headers, name="Vaso")
+    chaveiro = _product(client, org_id, headers, name="Chaveiro")
+    oculto = _product(client, org_id, headers, name="Oculto")
+
+    categories = [
+        {"id": "deco", "name": "Decoração", "product_ids": [vaso["id"]]},
+        {"id": "brindes", "name": "Brindes", "product_ids": [vaso["id"], chaveiro["id"]]},
+        {"id": "vazia", "name": "Só oculto", "product_ids": [oculto["id"]]},
+        {"id": "sem-nome", "name": "  ", "product_ids": [chaveiro["id"]]},
+    ]
+    response = client.put(
+        f"/api/v1/organizations/{org_id}/store",
+        json={"categories": categories, "hidden_product_ids": [oculto["id"]]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["settings"]["categories"] == categories
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    assert body["settings"]["categories"] == [
+        {"id": "deco", "name": "Decoração"},
+        {"id": "brindes", "name": "Brindes"},
+    ]
+    by_name = {p["name"]: p["category_ids"] for p in body["products"]}
+    assert by_name == {"Vaso": ["deco", "brindes"], "Chaveiro": ["brindes"]}

@@ -25,7 +25,12 @@ const EMPTY: StoreSettings = {
   highlights: [],
   hidden_product_ids: [],
   featured_product_ids: [],
+  categories: [],
 };
+
+function newCategoryId(): string {
+  return `cat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
 
 const input =
   "w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm placeholder:text-neutral-600";
@@ -148,6 +153,43 @@ export default function LojaAdminPage() {
     update({ [list]: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
   }
 
+  function addCategory() {
+    update({ categories: [...settings.categories, { id: newCategoryId(), name: "", product_ids: [] }] });
+  }
+
+  function renameCategory(id: string, name: string) {
+    update({ categories: settings.categories.map((c) => (c.id === id ? { ...c, name } : c)) });
+  }
+
+  function moveCategory(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= settings.categories.length) return;
+    const next = [...settings.categories];
+    [next[index], next[target]] = [next[target], next[index]];
+    update({ categories: next });
+  }
+
+  function removeCategory(id: string) {
+    const category = settings.categories.find((c) => c.id === id);
+    if (category?.name.trim() && !window.confirm(`Apagar a categoria "${category.name}"? Os produtos não são apagados.`)) return;
+    update({ categories: settings.categories.filter((c) => c.id !== id) });
+  }
+
+  function toggleCategory(categoryId: string, productId: string) {
+    update({
+      categories: settings.categories.map((c) =>
+        c.id !== categoryId
+          ? c
+          : {
+              ...c,
+              product_ids: c.product_ids.includes(productId)
+                ? c.product_ids.filter((x) => x !== productId)
+                : [...c.product_ids, productId],
+            }
+      ),
+    });
+  }
+
   async function handleSave() {
     if (!accessToken) return;
     setIsSaving(true);
@@ -157,6 +199,9 @@ export default function LojaAdminPage() {
         ...settings,
         whatsapp: normalizeWhatsapp(settings.whatsapp) || DEFAULT_WHATSAPP,
         highlights: settings.highlights.filter((h) => h.title.trim() || h.text.trim()),
+        categories: settings.categories
+          .filter((c) => c.name.trim())
+          .map((c) => ({ ...c, name: c.name.trim() })),
       };
       const saved = await apiFetch<StoreAdminResponse>(`${orgPath}/store`, {
         method: "PUT",
@@ -410,6 +455,49 @@ export default function LojaAdminPage() {
               </div>
             </Card>
 
+            <Card
+              title="Categorias"
+              hint="Organize o catálogo da loja (ex.: Decoração, Chaveiros, Presentes). Marque os produtos de cada categoria logo abaixo, em “Produtos na loja”. Um produto pode estar em mais de uma."
+            >
+              {settings.categories.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhuma categoria ainda.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {settings.categories.map((c, i) => (
+                    <li key={c.id} className="flex flex-wrap items-center gap-2">
+                      <input
+                        className={`${input} min-w-0 flex-1 basis-48`}
+                        placeholder="Nome da categoria"
+                        value={c.name}
+                        maxLength={60}
+                        onChange={(e) => renameCategory(c.id, e.target.value)}
+                      />
+                      <span className="w-20 text-xs text-neutral-500">
+                        {c.product_ids.filter((id) => products.some((p) => p.id === id)).length} produto(s)
+                      </span>
+                      <button onClick={() => moveCategory(i, -1)} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                        ↑
+                      </button>
+                      <button onClick={() => moveCategory(i, 1)} disabled={i === settings.categories.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                        ↓
+                      </button>
+                      <button onClick={() => removeCategory(c.id)} className="rounded border border-red-900 px-3 py-1.5 text-xs text-red-400 hover:bg-red-950">
+                        Apagar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {settings.categories.length < 30 && (
+                <button onClick={addCategory} className="text-sm text-blue-400 hover:underline">
+                  + Nova categoria
+                </button>
+              )}
+              {settings.categories.some((c) => !c.name.trim()) && (
+                <p className="text-xs text-yellow-400">Categorias sem nome são descartadas ao salvar.</p>
+              )}
+            </Card>
+
             <Card title="Produtos na loja" hint="Escolha o que aparece e o que fica em destaque. O preço mostrado ao cliente é o preço de venda; custos nunca são exibidos.">
               {products.length === 0 ? (
                 <p className="text-sm text-neutral-500">Nenhum produto cadastrado.</p>
@@ -453,6 +541,31 @@ export default function LojaAdminPage() {
                           {hidden ? "Oculto" : "Visível"}
                         </button>
                         </div>
+                        {settings.categories.some((c) => c.name.trim()) && (
+                          <div className="flex w-full flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] text-neutral-500">Categorias:</span>
+                            {settings.categories
+                              .filter((c) => c.name.trim())
+                              .map((c) => {
+                                const inCategory = c.product_ids.includes(p.id);
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => toggleCategory(c.id, p.id)}
+                                    aria-pressed={inCategory}
+                                    className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+                                      inCategory
+                                        ? "border-blue-600 bg-blue-950 text-blue-200"
+                                        : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                                    }`}
+                                  >
+                                    {inCategory ? "✓ " : ""}
+                                    {c.name}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        )}
                       </li>
                     );
                   })}

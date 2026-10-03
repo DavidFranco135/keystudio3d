@@ -5,6 +5,11 @@ import type { StoreSlide } from "@/lib/store";
 import { IconArrowRight, IconChevronLeft, IconChevronRight, IconWhatsapp, useSwipe } from "./ui";
 
 const SLIDE_MS = 5500;
+// Formato usado até a primeira foto carregar, e limites para fotos muito
+// estreitas/largas não deixarem a capa alta demais ou fina demais.
+const DEFAULT_RATIO = 16 / 9;
+const MIN_RATIO = 4 / 3;
+const MAX_RATIO = 21 / 9;
 
 export function HeroSlider({
   slides,
@@ -22,6 +27,14 @@ export function HeroSlider({
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
+  const [ratio, setRatio] = useState(DEFAULT_RATIO);
+
+  // A capa assume o formato da primeira foto, então as seguintes não mudam a
+  // altura da página no meio da troca.
+  const measureFirst = useCallback((img: HTMLImageElement | null) => {
+    if (!img || !img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return;
+    setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, img.naturalWidth / img.naturalHeight)));
+  }, []);
   const count = slides.length;
 
   const go = useCallback(
@@ -51,7 +64,7 @@ export function HeroSlider({
   return (
     <section
       aria-roledescription="carrossel"
-      className="group relative isolate h-[68vh] min-h-[440px] max-h-[680px] w-full overflow-hidden rounded-[28px] bg-[var(--accent)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]"
+      className="group relative isolate w-full overflow-hidden rounded-[28px] bg-[var(--accent)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
         setPaused(false);
@@ -70,6 +83,9 @@ export function HeroSlider({
     >
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_20%_10%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(135deg,var(--accent),#0b0b10)]" />
 
+      {/* Área da foto: tem o formato da própria foto, então nada é cortado.
+          No celular o texto vem logo abaixo; do tablet pra cima, por cima. */}
+      <div className="relative w-full sm:min-h-[380px]" style={{ aspectRatio: String(ratio) }}>
       {slides.map((slide, i) => (
         <div
           key={`${slide.url}-${i}`}
@@ -78,20 +94,36 @@ export function HeroSlider({
             i === index ? "opacity-100" : "opacity-0"
           }`}
         >
+          {/* Fundo desfocado da própria foto: preenche as sobras quando o
+              formato da foto não bate com o da capa (ex.: celular). */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={slide.url}
+            alt=""
+            aria-hidden
+            loading={i === 0 ? "eager" : "lazy"}
+            className={`absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75 ${
+              i === index ? "animate-kenburns" : ""
+            }`}
+          />
+          {/* A foto em si aparece inteira, sem corte. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={slide.url}
             alt={slide.title || storeName}
             loading={i === 0 ? "eager" : "lazy"}
-            className={`h-full w-full object-cover ${i === index ? "animate-kenburns" : ""}`}
+            ref={i === 0 ? measureFirst : undefined}
+            onLoad={i === 0 ? (e) => measureFirst(e.currentTarget) : undefined}
+            className="relative h-full w-full object-contain"
           />
         </div>
       ))}
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-transparent to-transparent" />
+      <div className="absolute inset-0 hidden bg-gradient-to-t from-black/75 via-black/25 to-black/10 sm:block" />
+      <div className="absolute inset-0 hidden bg-gradient-to-r from-black/35 via-transparent to-transparent sm:block" />
+      </div>
 
-      <div className="absolute inset-x-0 bottom-0 p-6 pb-16 sm:p-10 sm:pb-20 lg:p-14 lg:pb-24">
+      <div className="relative p-6 pb-14 sm:absolute sm:inset-x-0 sm:bottom-0 sm:p-10 sm:pb-20 lg:p-14 lg:pb-24">
         <div key={`${index}-${title}`} className="max-w-2xl space-y-4 text-white">
           <span className="inline-flex animate-fade-up items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] backdrop-blur-md">
             {storeName}

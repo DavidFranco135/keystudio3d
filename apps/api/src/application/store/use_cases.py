@@ -11,6 +11,7 @@ from src.infrastructure.repositories import (
     ProductRepository,
 )
 from src.interfaces.http.v1.schemas import (
+    PublicCategory,
     PublicProduct,
     PublicStoreResponse,
     PublicStoreSettings,
@@ -70,6 +71,11 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
 
     hidden = set(settings.hidden_product_ids)
     featured = set(settings.featured_product_ids)
+    named_categories = [c for c in settings.categories if c.name.strip()]
+    categories_of: dict[str, list[str]] = {}
+    for category in named_categories:
+        for product_id in category.product_ids:
+            categories_of.setdefault(product_id, []).append(category.id)
     products: list[PublicProduct] = []
     for product in ProductRepository(db).list_for_org(org.id):
         if not product.is_active or str(product.id) in hidden:
@@ -93,8 +99,16 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
                 stock_quantity=stock,
                 available=stock is None or stock > 0,
                 featured=str(product.id) in featured,
+                category_ids=categories_of.get(str(product.id), []),
             )
         )
+
+    # Só categorias com algum produto visível — categoria vazia na vitrine
+    # leva o cliente a uma lista sem nada.
+    used = {cid for p in products for cid in p.category_ids}
+    public_categories = [
+        PublicCategory(id=c.id, name=c.name.strip()) for c in named_categories if c.id in used
+    ]
 
     response = PublicStoreResponse(
         slug=org.slug,
@@ -112,6 +126,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
             theme=settings.theme,
             slides=settings.slides,
             highlights=settings.highlights,
+            categories=public_categories,
         ),
         products=products,
     )

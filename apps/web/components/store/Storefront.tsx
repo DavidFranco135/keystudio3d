@@ -5,7 +5,9 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
 import { formatWhatsappDisplay, themeVars, whatsappLink } from "@/lib/store";
+import { focusStyle } from "@/lib/focus";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
+import { FeaturedSlider } from "./FeaturedSlider";
 import { HeroSlider } from "./HeroSlider";
 import { ProductCard } from "./ProductCard";
 import { ProductModal } from "./ProductModal";
@@ -178,6 +180,7 @@ export function Storefront({ slug }: { slug: string }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"relevance" | "price-asc" | "price-desc" | "name">("relevance");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [category, setCategory] = useState<string | null>(null);
   const [question, setQuestion] = useState({ name: "", text: "" });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -291,14 +294,15 @@ export function Storefront({ slug }: { slug: string }) {
     let list = store.products.filter(
       (p) =>
         (!term || p.name.toLowerCase().includes(term) || (p.description ?? "").toLowerCase().includes(term)) &&
-        (!onlyAvailable || p.available)
+        (!onlyAvailable || p.available) &&
+        (!category || p.category_ids.includes(category))
     );
     if (sort === "price-asc") list = [...list].sort((a, b) => a.price - b.price);
     else if (sort === "price-desc") list = [...list].sort((a, b) => b.price - a.price);
     else if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
     else list = [...list].sort((a, b) => Number(b.featured) - Number(a.featured));
     return list;
-  }, [store, search, sort, onlyAvailable]);
+  }, [store, search, sort, onlyAvailable, category]);
 
   if (error) {
     return (
@@ -339,6 +343,18 @@ export function Storefront({ slug }: { slug: string }) {
           .filter((p) => p.photo_urls.length > 0)
           .slice(0, 5)
           .map((p) => ({ url: p.photo_urls[0], title: p.name, subtitle: formatCurrency(p.price) }));
+
+  const categories = settings.categories.map((c) => {
+    const items = store.products.filter((p) => p.category_ids.includes(c.id));
+    const cover = items.find((p) => p.photo_urls.length > 0) ?? null;
+    return { ...c, count: items.length, cover };
+  });
+  const activeCategory = categories.find((c) => c.id === category) ?? null;
+
+  const openCategory = (id: string | null) => {
+    setCategory(id);
+    goTab(1);
+  };
 
   const qtyOf = (id: string) => lines.find((l) => l.id === id)?.qty ?? 0;
 
@@ -433,13 +449,73 @@ export function Storefront({ slug }: { slug: string }) {
         <div key={tab} className={dir >= 0 ? "animate-slide-in-right" : "animate-slide-in-left"}>
           {tab === 0 && (
             <div className="space-y-20 sm:space-y-28">
-              <HeroSlider
-                slides={slides}
-                storeName={storeName}
-                tagline={settings.tagline}
-                whatsappHref={waGeneral}
-                onCatalog={() => goTab(1)}
-              />
+              <div className="space-y-10 sm:space-y-14">
+                <HeroSlider
+                  slides={slides}
+                  storeName={storeName}
+                  tagline={settings.tagline}
+                  whatsappHref={waGeneral}
+                  onCatalog={() => openCategory(null)}
+                />
+
+                {featuredProducts.length > 0 && (
+                  <section className="space-y-6">
+                    <SectionTitle
+                      eyebrow="Seleção"
+                      title="Destaques da loja"
+                      action={
+                        <button
+                          onClick={() => openCategory(null)}
+                          className="group hidden items-center gap-2 text-sm font-semibold text-[var(--accent)] sm:inline-flex"
+                        >
+                          Ver catálogo completo
+                          <IconArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        </button>
+                      }
+                    />
+                    <FeaturedSlider>{featuredProducts.map((p) => cardFor(p))}</FeaturedSlider>
+                  </section>
+                )}
+              </div>
+
+              {categories.length > 0 && (
+                <section className="space-y-8">
+                  <Reveal>
+                    <SectionTitle eyebrow="Navegue" title="Categorias" />
+                  </Reveal>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+                    {categories.map((c, i) => (
+                      <Reveal key={c.id} delay={(i % 4) * 80}>
+                        <button
+                          onClick={() => openCategory(c.id)}
+                          className="group relative flex aspect-[5/4] w-full overflow-hidden rounded-3xl bg-[var(--accent)] text-left shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-xl"
+                        >
+                          {c.cover && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={c.cover.photo_urls[0]}
+                              alt=""
+                              loading="lazy"
+                              style={focusStyle(c.cover.photo_focus, c.cover.photo_urls[0])}
+                              className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.07]"
+                            />
+                          )}
+                          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                          <span className="relative mt-auto block p-4 text-white sm:p-5">
+                            <span className="block font-[family-name:var(--font-display)] text-lg font-semibold leading-tight sm:text-xl">
+                              {c.name}
+                            </span>
+                            <span className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
+                              {c.count} {c.count === 1 ? "produto" : "produtos"}
+                              <IconArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                            </span>
+                          </span>
+                        </button>
+                      </Reveal>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {settings.highlights.some((h) => h.title) && (
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -457,39 +533,6 @@ export function Storefront({ slug }: { slug: string }) {
                       </Reveal>
                     ))}
                 </div>
-              )}
-
-              {featuredProducts.length > 0 && (
-                <section className="space-y-8">
-                  <Reveal>
-                    <SectionTitle
-                      eyebrow="Seleção"
-                      title="Destaques da loja"
-                      action={
-                        <button
-                          onClick={() => goTab(1)}
-                          className="group hidden items-center gap-2 text-sm font-semibold text-[var(--accent)] sm:inline-flex"
-                        >
-                          Ver catálogo completo
-                          <IconArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                        </button>
-                      }
-                    />
-                  </Reveal>
-                  <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-                    {featuredProducts.map((p, i) => (
-                      <Reveal key={p.id} delay={(i % 4) * 80}>
-                        {cardFor(p)}
-                      </Reveal>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => goTab(1)}
-                    className="mx-auto flex items-center gap-2 text-sm font-semibold text-[var(--accent)] sm:hidden"
-                  >
-                    Ver catálogo completo <IconArrowRight className="h-4 w-4" />
-                  </button>
-                </section>
               )}
 
               {settings.about && (
@@ -537,7 +580,33 @@ export function Storefront({ slug }: { slug: string }) {
 
           {tab === 1 && (
             <section className="space-y-8">
-              <SectionTitle eyebrow="Catálogo" title="Todos os produtos" />
+              <SectionTitle eyebrow="Catálogo" title={activeCategory ? activeCategory.name : "Todos os produtos"} />
+              {categories.length > 0 && (
+                <div
+                  className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden"
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchEnd={(e) => e.stopPropagation()}
+                >
+                  {[{ id: null, name: "Todas", count: store.products.length }, ...categories].map((c) => {
+                    const active = category === c.id;
+                    return (
+                      <button
+                        key={c.id ?? "all"}
+                        onClick={() => setCategory(c.id)}
+                        aria-pressed={active}
+                        className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm font-medium transition ${
+                          active
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                            : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)]"
+                        }`}
+                      >
+                        {c.name}
+                        <span className={`text-xs ${active ? "opacity-80" : "opacity-60"}`}>{c.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <IconSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted)]" />

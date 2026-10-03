@@ -54,3 +54,12 @@ def test_rejects_unknown_status_values():
         validate_transition("bogus", "order")
     with pytest.raises(InvalidOrderTransitionError):
         validate_transition("quote", "bogus")
+
+
+def test_manual_status_accepts_any_known_status():
+    from src.domain.orders.status import validate_status
+
+    for status in ["quote", "order", "paid", "printing", "completed", "cancelled"]:
+        validate_status(status)
+    with pytest.raises(InvalidOrderTransitionError):
+        validate_status("bogus")

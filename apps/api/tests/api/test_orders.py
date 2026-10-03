@@ -380,3 +380,48 @@ def test_workflow_transition_moves_production_status(client: TestClient):
         response = client.post(f"{url}/transition", json={"status": step}, headers=headers)
         assert response.status_code == 200, (step, response.text)
         assert response.json()["production_status"] == expected, step
+
+
+def test_order_can_be_created_with_a_chosen_status(client: TestClient):
+    _org, _headers, order = _setup_order(client, status="production")
+    assert order["status"] == "production"
+    assert order["production_status"] == "doing"
+
+
+def test_edit_can_set_any_status_even_on_finished_orders(client: TestClient):
+    org_id, headers, order = _setup_order(client, status="completed")
+    url = f"/api/v1/organizations/{org_id}/orders/{order['id']}"
+    assert order["production_status"] == "done"
+
+    response = client.patch(url, json={"status": "printing"}, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "printing"
+    assert response.json()["production_status"] == "doing"
+
+    response = client.patch(url, json={"status": "cancelled"}, headers=headers)
+    assert response.json()["status"] == "cancelled"
+
+    response = client.patch(url, json={"status": "order"}, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "order"
+
+    bad = client.patch(url, json={"status": "bogus"}, headers=headers)
+    assert bad.status_code == 422
+
+
+def test_paid_revenue_is_recorded_only_once_when_status_goes_back_and_forth(client: TestClient):
+    org_id, headers, order = _setup_order(client)
+    url = f"/api/v1/organizations/{org_id}/orders/{order['id']}"
+    client.post(f"{url}/items", json={"quantity": 1, "unit_price": 100.0}, headers=headers)
+
+    client.patch(url, json={"status": "paid"}, headers=headers)
+    client.patch(url, json={"status": "order"}, headers=headers)
+    client.patch(url, json={"status": "paid"}, headers=headers)
+    client.patch(url, json={"status": "order"}, headers=headers)
+    client.post(f"{url}/transition", json={"status": "paid"}, headers=headers)
+
+    transactions = client.get(
+        f"/api/v1/organizations/{org_id}/finance/transactions", headers=headers
+    ).json()
+    assert len(transactions) == 1
+    assert transactions[0]["amount"] == 100.0

@@ -4,12 +4,12 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.application.customers.use_cases import get_customer
-from src.application.financial.use_cases import record_order_paid
+from src.application.financial.use_cases import order_has_paid_revenue, record_order_paid
 from src.application.inventory.use_cases import get_material
 from src.application.machines.use_cases import get_machine
 from src.application.products.use_cases import get_product
 from src.application.projects.use_cases import get_project
-from src.domain.orders.status import validate_transition
+from src.domain.orders.status import validate_status, validate_transition
 from src.domain.orders.totals import OrderItemTotal, compute_total_amount
 from src.domain.shared.exceptions import (
     OrderItemNotFoundError,
@@ -41,6 +41,7 @@ def create_order(
     notes: str | None,
     created_by: UUID | None,
     due_date: date | None = None,
+    status: str | None = None,
 ) -> Order:
     get_customer(db, organization_id=organization_id, customer_id=customer_id)
 
@@ -62,6 +63,8 @@ def create_order(
         created_by=created_by,
         due_date=_to_datetime(due_date),
     )
+    if status is not None and status != order.status:
+        _set_status_manually(db, order, new_status=status, triggered_by=created_by)
     db.commit()
     return order
 
@@ -87,8 +90,12 @@ def update_order(
     due_date: date | None = None,
     clear_due_date: bool = False,
     production_status: str | None = None,
+    status: str | None = None,
+    triggered_by: UUID | None = None,
 ) -> Order:
     order = get_order(db, organization_id=organization_id, order_id=order_id)
+    if status is not None and status != order.status:
+        _set_status_manually(db, order, new_status=status, triggered_by=triggered_by)
     if customer_id is not None:
         get_customer(db, organization_id=organization_id, customer_id=customer_id)
         order.customer_id = customer_id
@@ -125,6 +132,42 @@ def _sync_production_status(order: Order, new_status: str) -> None:
         order.production_status = "doing"
 
 
+_EARLY_STATUSES = {"quote", "order", "paid"}
+
+
+def _set_status_manually(
+    db: Session, order: Order, *, new_status: str, triggered_by: UUID | None
+) -> None:
+    """Status escolhido à mão na criação/edição: pode ir para qualquer estágio,
+
+    para frente ou para trás. A situação de produção acompanha também na volta
+    (reabrir um pedido concluído o tira de "done"), e a receita do "pago" só é
+    lançada uma vez por pedido, por mais que o status vá e volte.
+    """
+    validate_status(new_status)
+    OrderRepository(db).update_status(order, new_status=new_status)
+    if new_status in _FINISHED_STATUSES:
+        order.production_status = "done"
+    elif new_status in _IN_PROGRESS_STATUSES:
+        order.production_status = "doing"
+    elif new_status in _EARLY_STATUSES and order.production_status == "done":
+        order.production_status = "todo"
+    if (
+        new_status == "paid"
+        and order.total_amount > 0
+        and not order_has_paid_revenue(
+            db, organization_id=order.organization_id, order_id=order.id
+        )
+    ):
+        record_order_paid(
+            db,
+            organization_id=order.organization_id,
+            order_id=order.id,
+            amount=order.total_amount,
+            created_by=triggered_by,
+        )
+
+
 def transition_order_status(
     db: Session,
     *,
@@ -137,7 +180,9 @@ def transition_order_status(
     validate_transition(order.status, new_status)
     OrderRepository(db).update_status(order, new_status=new_status)
     _sync_production_status(order, new_status)
-    if new_status == "paid":
+    if new_status == "paid" and not order_has_paid_revenue(
+        db, organization_id=organization_id, order_id=order.id
+    ):
         record_order_paid(
             db,
             organization_id=organization_id,

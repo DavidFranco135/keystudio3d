@@ -45,3 +45,13 @@ def validate_transition(current: str, new: str) -> None:
         raise InvalidOrderTransitionError(
             f"Não é possível ir de '{current}' para '{new}' — só é permitido avançar."
         )
+
+
+def validate_status(status: str) -> None:
+    """Correção manual (criação/edição do pedido): aceita qualquer status
+
+    conhecido, em qualquer direção — inclusive reabrir um pedido concluído ou
+    cancelado. O funil estrito continua valendo para `validate_transition`.
+    """
+    if status not in _SEQUENCE and status != _TERMINAL:
+        raise InvalidOrderTransitionError(f"Status inválido: {status!r}.")

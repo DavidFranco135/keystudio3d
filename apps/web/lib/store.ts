@@ -1,5 +1,7 @@
 export type StoreSlide = { url: string; title: string; subtitle: string };
 export type StoreHighlight = { title: string; text: string };
+export type StoreCategory = { id: string; name: string; product_ids: string[] };
+export type PublicCategory = { id: string; name: string };
 
 export type StoreSettings = {
   display_name: string;
@@ -16,6 +18,7 @@ export type StoreSettings = {
   highlights: StoreHighlight[];
   hidden_product_ids: string[];
   featured_product_ids: string[];
+  categories: StoreCategory[];
 };
 
 export type StoreAdminResponse = { slug: string; name: string; settings: StoreSettings };
@@ -31,12 +34,15 @@ export type PublicProduct = {
   stock_quantity: number | null;
   available: boolean;
   featured: boolean;
+  category_ids: string[];
 };
 
 export type PublicStore = {
   slug: string;
   name: string;
-  settings: Omit<StoreSettings, "hidden_product_ids" | "featured_product_ids">;
+  settings: Omit<StoreSettings, "hidden_product_ids" | "featured_product_ids" | "categories"> & {
+    categories: PublicCategory[];
+  };
   products: PublicProduct[];
 };
 

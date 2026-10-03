@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
@@ -55,6 +55,13 @@ export default function ProdutosPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("");
   const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // O formulário fica no topo da lista; ao abrir (novo ou "Editar" num
+  // produto lá embaixo) leva a tela até ele, senão parece que nada aconteceu.
+  useEffect(() => {
+    if (showForm) formRef.current?.scrollIntoView({ block: "start" });
+  }, [showForm, editingId]);
 
   // As categorias moram nas configurações da loja (mesmo lugar de destaque/oculto).
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -458,9 +465,20 @@ export default function ProdutosPage() {
 
         {showForm && (
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
-            className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-950/50 p-4"
+            className="scroll-mt-24 space-y-4 rounded-xl border border-neutral-800 bg-neutral-950/50 p-4"
           >
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="truncate font-medium">
+                {editingId
+                  ? `Editando: ${products.find((p) => p.id === editingId)?.name ?? "produto"}`
+                  : "Novo produto"}
+              </h2>
+              <button type="button" onClick={resetForm} className="shrink-0 text-sm text-neutral-400 hover:underline">
+                Cancelar
+              </button>
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"

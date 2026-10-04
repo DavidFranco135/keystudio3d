@@ -435,7 +435,7 @@ export default function LojaAdminPage() {
                         settings.accent === key ? "border-blue-500 bg-blue-950" : "border-neutral-700 hover:border-neutral-500"
                       }`}
                     >
-                      <span className="h-4 w-4 rounded-full" style={{ background: a.color }} />
+                      <span className="h-4 w-4 rounded-full" style={{ background: a.swatch ?? a.color }} />
                       {a.label}
                     </button>
                   ))}

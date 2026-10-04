@@ -55,12 +55,31 @@ export type CartLine = { id: string; qty: number; note: string };
 
 export const DEFAULT_WHATSAPP = "5521970386065";
 
-export const ACCENTS: Record<string, { label: string; color: string; soft: string }> = {
+type Accent = {
+  label: string;
+  color: string;
+  soft: string;
+  // Cor mostrada no seletor de "Minha Loja" (quando difere de `color`).
+  swatch?: string;
+  // Variante para o tema escuro, quando a cor do tema claro não funciona lá.
+  dark?: { color: string; ink: string };
+};
+
+export const ACCENTS: Record<string, Accent> = {
+  // Cobre da logo KeyStudio3D (#e09060). No tema claro usa o mesmo cobre mais
+  // escuro, porque o tom da logo não tem contraste sobre fundo claro.
+  copper: {
+    label: "Cobre KeyStudio",
+    color: "#9a4f22",
+    soft: "#fbf1ea",
+    swatch: "#e09060",
+    dark: { color: "#e09060", ink: "#140c08" },
+  },
   indigo: { label: "Índigo", color: "#4f46e5", soft: "#eef2ff" },
   emerald: { label: "Esmeralda", color: "#047857", soft: "#ecfdf5" },
   rose: { label: "Rosé", color: "#be123c", soft: "#fff1f2" },
   amber: { label: "Âmbar", color: "#b45309", soft: "#fffbeb" },
-  slate: { label: "Grafite", color: "#1e293b", soft: "#f1f5f9" },
+  slate: { label: "Grafite", color: "#1e293b", soft: "#f1f5f9", dark: { color: "#e2e8f0", ink: "#0f172a" } },
 };
 
 export const THEMES = {
@@ -76,17 +95,19 @@ function rgba(hex: string, alpha: number): string {
 export function themeVars(accent: string, theme: "light" | "dark"): React.CSSProperties {
   const a = ACCENTS[accent] ?? ACCENTS.indigo;
   const t = THEMES[theme] ?? THEMES.light;
+  const color = theme === "dark" && a.dark ? a.dark.color : a.color;
+  const ink = theme === "dark" && a.dark ? a.dark.ink : "#ffffff";
   return {
     "--bg": t.bg,
     "--surface": t.surface,
     "--ink": t.ink,
     "--muted": t.muted,
     "--line": t.line,
-    "--accent": theme === "dark" && accent === "slate" ? "#e2e8f0" : a.color,
-    "--accent-ink": theme === "dark" && accent === "slate" ? "#0f172a" : "#ffffff",
+    "--accent": color,
+    "--accent-ink": ink,
     "--bg-glass": rgba(t.bg, 0.82),
     "--surface-glass": rgba(t.surface, 0.82),
-    "--accent-ring": rgba(theme === "dark" && accent === "slate" ? "#e2e8f0" : a.color, 0.22),
+    "--accent-ring": rgba(color, 0.22),
     "--accent-soft": theme === "dark" ? "rgba(255,255,255,0.06)" : a.soft,
   } as React.CSSProperties;
 }

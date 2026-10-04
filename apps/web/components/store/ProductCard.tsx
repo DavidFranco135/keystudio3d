@@ -1,7 +1,7 @@
 "use client";
 
 import type { PublicProduct } from "@/lib/store";
-import { formatCurrency } from "@/lib/format";
+import { priceLabel } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { IconMinus, IconPlus } from "./ui";
 
@@ -77,9 +77,13 @@ export function ProductCard({
         </div>
 
         <div className="mt-auto flex flex-col gap-2.5 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
-          <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
-            {formatCurrency(product.price)}
-          </p>
+          {product.price_on_request ? (
+            <p className="text-sm font-semibold text-[var(--accent)]">{priceLabel(product)}</p>
+          ) : (
+            <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
+              {priceLabel(product)}
+            </p>
+          )}
 
           {!product.available ? (
             <span className="text-xs text-[var(--muted)]">Indisponível</span>

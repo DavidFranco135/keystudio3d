@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
-import { formatWhatsappDisplay, themeVars, whatsappLink } from "@/lib/store";
+import { formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
 import { FeaturedSlider } from "./FeaturedSlider";
@@ -194,7 +194,11 @@ export function Storefront({ slug }: { slug: string }) {
         setStore({
           ...data,
           settings: { ...data.settings, categories: data.settings.categories ?? [] },
-          products: data.products.map((p) => ({ ...p, category_ids: p.category_ids ?? [] })),
+          products: data.products.map((p) => ({
+            ...p,
+            category_ids: p.category_ids ?? [],
+            price_on_request: p.price_on_request ?? false,
+          })),
         });
       })
       .catch((err) => {
@@ -304,8 +308,10 @@ export function Storefront({ slug }: { slug: string }) {
         (!onlyAvailable || p.available) &&
         (!category || p.category_ids.includes(category))
     );
-    if (sort === "price-asc") list = [...list].sort((a, b) => a.price - b.price);
-    else if (sort === "price-desc") list = [...list].sort((a, b) => b.price - a.price);
+    const byRequest = (a: PublicProduct, b: PublicProduct) =>
+      Number(a.price_on_request) - Number(b.price_on_request);
+    if (sort === "price-asc") list = [...list].sort((a, b) => byRequest(a, b) || a.price - b.price);
+    else if (sort === "price-desc") list = [...list].sort((a, b) => byRequest(a, b) || b.price - a.price);
     else if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
     else list = [...list].sort((a, b) => Number(b.featured) - Number(a.featured));
     return list;
@@ -349,7 +355,7 @@ export function Storefront({ slug }: { slug: string }) {
       : store.products
           .filter((p) => p.photo_urls.length > 0)
           .slice(0, 5)
-          .map((p) => ({ url: p.photo_urls[0], title: p.name, subtitle: formatCurrency(p.price) }));
+          .map((p) => ({ url: p.photo_urls[0], title: p.name, subtitle: priceLabel(p) }));
 
   const categories = settings.categories.map((c) => {
     const items = store.products.filter((p) => p.category_ids.includes(c.id));
@@ -813,7 +819,8 @@ export function Storefront({ slug }: { slug: string }) {
             className="flex animate-fade-up items-center gap-3 rounded-full bg-[var(--accent)] py-3 pl-5 pr-6 text-sm font-semibold text-[var(--accent-ink)] shadow-2xl transition hover:-translate-y-0.5"
           >
             <IconCart className="h-5 w-5" />
-            {units} {units === 1 ? "item" : "itens"} · {formatCurrency(total)}
+            {units} {units === 1 ? "item" : "itens"}
+            {total > 0 ? ` · ${formatCurrency(total)}` : ""}
           </button>
         )}
         <a

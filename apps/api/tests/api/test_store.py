@@ -151,3 +151,23 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
     ]
     by_name = {p["name"]: p["category_ids"] for p in body["products"]}
     assert by_name == {"Vaso": ["deco", "brindes"], "Chaveiro": ["brindes"]}
+
+
+def test_price_on_request_hides_the_price_publicly(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    consultar = _product(client, org_id, headers, name="Sob medida", manual_price=300)
+    _product(client, org_id, headers, name="Chaveiro", manual_price=12.5)
+
+    response = client.put(
+        f"/api/v1/organizations/{org_id}/store",
+        json={"price_on_request_product_ids": [consultar["id"]]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    by_name = {p["name"]: p for p in body["products"]}
+    assert by_name["Sob medida"]["price_on_request"] is True
+    assert by_name["Sob medida"]["price"] == 0.0
+    assert by_name["Chaveiro"]["price_on_request"] is False
+    assert by_name["Chaveiro"]["price"] == 12.5

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import type { OrderLine } from "@/lib/store";
-import { buildOrderMessage, whatsappLink } from "@/lib/store";
+import { buildOrderMessage, priceLabel, whatsappLink } from "@/lib/store";
 import { formatCurrency } from "@/lib/format";
 import { focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
@@ -56,6 +56,7 @@ export function CartDrawer({
   if (!open) return null;
 
   const total = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+  const anyOnRequest = lines.some((l) => l.product.price_on_request);
   const units = lines.reduce((sum, l) => sum + l.qty, 0);
   const href = whatsappLink(whatsapp, buildOrderMessage(storeName, lines, customer));
 
@@ -162,7 +163,7 @@ export function CartDrawer({
                             <IconPlus className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <p className="text-sm font-semibold">{formatCurrency(product.price * qty)}</p>
+                        <p className="text-sm font-semibold">{priceLabel(product, qty)}</p>
                       </div>
                     </div>
                   </div>
@@ -198,9 +199,12 @@ export function CartDrawer({
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-[var(--muted)]">Total estimado</span>
                 <span className="font-[family-name:var(--font-display)] text-3xl font-semibold">
-                  {formatCurrency(total)}
+                  {anyOnRequest && total === 0 ? "A consultar" : formatCurrency(total)}
                 </span>
               </div>
+              {anyOnRequest && total > 0 && (
+                <p className="-mt-2 text-right text-xs text-[var(--muted)]">+ itens com preço a consultar</p>
+              )}
               <a
                 href={href}
                 target="_blank"

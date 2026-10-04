@@ -18,6 +18,7 @@ export type StoreSettings = {
   highlights: StoreHighlight[];
   hidden_product_ids: string[];
   featured_product_ids: string[];
+  price_on_request_product_ids: string[];
   categories: StoreCategory[];
 };
 
@@ -35,12 +36,16 @@ export type PublicProduct = {
   available: boolean;
   featured: boolean;
   category_ids: string[];
+  price_on_request: boolean;
 };
 
 export type PublicStore = {
   slug: string;
   name: string;
-  settings: Omit<StoreSettings, "hidden_product_ids" | "featured_product_ids" | "categories"> & {
+  settings: Omit<
+    StoreSettings,
+    "hidden_product_ids" | "featured_product_ids" | "price_on_request_product_ids" | "categories"
+  > & {
     categories: PublicCategory[];
   };
   products: PublicProduct[];
@@ -106,27 +111,36 @@ export function formatWhatsappDisplay(number: string): string {
 
 export type OrderLine = { product: PublicProduct; qty: number; note: string };
 
+export const PRICE_ON_REQUEST_LABEL = "Preço a consultar";
+
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+export function priceLabel(product: PublicProduct, qty = 1): string {
+  return product.price_on_request ? PRICE_ON_REQUEST_LABEL : brl(product.price * qty);
+}
+
 export function buildOrderMessage(
   storeName: string,
   lines: OrderLine[],
   customer: { name: string; extra: string }
 ): string {
-  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const total = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+  const anyOnRequest = lines.some((l) => l.product.price_on_request);
   const items = lines
     .map((l, i) => {
       const size = l.product.size ? ` (${l.product.size})` : "";
       const note = l.note ? `\n   Obs: ${l.note}` : "";
-      return `*${i + 1}.* ${l.product.name}${size}\n   ${l.qty} × ${brl(l.product.price)} = ${brl(
-        l.product.price * l.qty
-      )}${note}`;
+      const price = l.product.price_on_request
+        ? `${l.qty} × preço a consultar`
+        : `${l.qty} × ${brl(l.product.price)} = ${brl(l.product.price * l.qty)}`;
+      return `*${i + 1}.* ${l.product.name}${size}\n   ${price}${note}`;
     })
     .join("\n\n");
-  const parts = [
-    `Olá, ${storeName}! Gostaria de fazer um pedido:`,
-    items,
-    `*Total estimado: ${brl(total)}*`,
-  ];
+  const totalLine =
+    anyOnRequest && total === 0
+      ? "*Total: a consultar*"
+      : `*Total estimado: ${brl(total)}*${anyOnRequest ? " + itens com preço a consultar" : ""}`;
+  const parts = [`Olá, ${storeName}! Gostaria de fazer um pedido:`, items, totalLine];
   if (customer.name.trim()) parts.push(`*Nome:* ${customer.name.trim()}`);
   if (customer.extra.trim()) parts.push(`*Informações adicionais:* ${customer.extra.trim()}`);
   return parts.join("\n\n");

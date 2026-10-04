@@ -71,6 +71,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
 
     hidden = set(settings.hidden_product_ids)
     featured = set(settings.featured_product_ids)
+    on_request = set(settings.price_on_request_product_ids)
     named_categories = [c for c in settings.categories if c.name.strip()]
     categories_of: dict[str, list[str]] = {}
     for category in named_categories:
@@ -87,6 +88,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
         else:
             continue
         stock = product.stock_quantity
+        hide_price = str(product.id) in on_request
         products.append(
             PublicProduct(
                 id=product.id,
@@ -95,11 +97,12 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
                 size=product.size,
                 photo_urls=list(product.photo_urls or []),
                 photo_focus=list(product.photo_focus or []),
-                price=round(float(price), 2),
+                price=0.0 if hide_price else round(float(price), 2),
                 stock_quantity=stock,
                 available=stock is None or stock > 0,
                 featured=str(product.id) in featured,
                 category_ids=categories_of.get(str(product.id), []),
+                price_on_request=hide_price,
             )
         )
 

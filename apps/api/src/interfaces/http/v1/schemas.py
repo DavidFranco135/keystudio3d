@@ -735,6 +735,8 @@ class StoreSettings(BaseModel):
     highlights: list[StoreHighlight] = Field(default_factory=list, max_length=3)
     hidden_product_ids: list[str] = Field(default_factory=list)
     featured_product_ids: list[str] = Field(default_factory=list)
+    # Produtos exibidos como "Preço a consultar" na loja pública.
+    price_on_request_product_ids: list[str] = Field(default_factory=list)
     categories: list[StoreCategory] = Field(default_factory=list, max_length=30)
 
 
@@ -756,6 +758,8 @@ class PublicProduct(BaseModel):
     available: bool
     featured: bool
     category_ids: list[str] = Field(default_factory=list)
+    # Quando True, `price` vem 0 — o valor real não é exposto publicamente.
+    price_on_request: bool = False
 
 
 class PublicCategory(BaseModel):

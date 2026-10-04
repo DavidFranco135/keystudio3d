@@ -25,6 +25,7 @@ const EMPTY: StoreSettings = {
   highlights: [],
   hidden_product_ids: [],
   featured_product_ids: [],
+  price_on_request_product_ids: [],
   categories: [],
 };
 
@@ -148,7 +149,10 @@ export default function LojaAdminPage() {
     update({ slides: next });
   }
 
-  function toggleId(list: "hidden_product_ids" | "featured_product_ids", id: string) {
+  function toggleId(
+    list: "hidden_product_ids" | "featured_product_ids" | "price_on_request_product_ids",
+    id: string
+  ) {
     const current = settings[list];
     update({ [list]: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
   }
@@ -506,6 +510,7 @@ export default function LojaAdminPage() {
                   {products.map((p) => {
                     const hidden = settings.hidden_product_ids.includes(p.id);
                     const featured = settings.featured_product_ids.includes(p.id);
+                    const onRequest = settings.price_on_request_product_ids.includes(p.id);
                     return (
                       <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
@@ -517,7 +522,11 @@ export default function LojaAdminPage() {
                         <div className="min-w-0 flex-1 basis-40">
                           <p className={`truncate text-sm font-medium ${hidden ? "text-neutral-500 line-through" : ""}`}>{p.name}</p>
                           <p className="text-xs text-neutral-500">
-                            {p.manual_price != null ? formatCurrency(p.manual_price) : "Preço calculado pela receita"}
+                            {onRequest
+                              ? "Preço a consultar na loja"
+                              : p.manual_price != null
+                                ? formatCurrency(p.manual_price)
+                                : "Preço calculado pela receita"}
                             {p.stock_quantity === 0 ? " · Esgotado" : ""}
                           </p>
                         </div>
@@ -531,6 +540,16 @@ export default function LojaAdminPage() {
                           }`}
                         >
                           ★ Destaque
+                        </button>
+                        <button
+                          onClick={() => toggleId("price_on_request_product_ids", p.id)}
+                          disabled={hidden}
+                          aria-pressed={onRequest}
+                          className={`rounded-full border px-3 py-1 text-xs disabled:opacity-30 ${
+                            onRequest ? "border-purple-600 bg-purple-950 text-purple-200" : "border-neutral-700 text-neutral-400"
+                          }`}
+                        >
+                          Preço a consultar
                         </button>
                         <button
                           onClick={() => toggleId("hidden_product_ids", p.id)}

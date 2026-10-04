@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CartLine, PublicProduct } from "@/lib/store";
-import { whatsappLink } from "@/lib/store";
-import { formatCurrency } from "@/lib/format";
+import { priceLabel, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
 import {
@@ -146,8 +145,12 @@ export function ProductModal({
             <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold leading-tight">
               {product.name}
             </h2>
-            <p className="font-[family-name:var(--font-display)] text-3xl font-semibold text-[var(--accent)]">
-              {formatCurrency(product.price)}
+            <p
+              className={`font-[family-name:var(--font-display)] font-semibold text-[var(--accent)] ${
+                product.price_on_request ? "text-2xl" : "text-3xl"
+              }`}
+            >
+              {priceLabel(product)}
             </p>
           </div>
 
@@ -215,8 +218,8 @@ export function ProductModal({
                 onClick={() => onSave(qty, note.trim())}
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 text-sm font-semibold text-[var(--accent-ink)] shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
               >
-                {line ? "Atualizar no pedido" : "Adicionar ao pedido"} ·{" "}
-                {formatCurrency(product.price * qty)}
+                {line ? "Atualizar no pedido" : "Adicionar ao pedido"}
+                {product.price_on_request ? "" : ` · ${priceLabel(product, qty)}`}
               </button>
             )}
             <a

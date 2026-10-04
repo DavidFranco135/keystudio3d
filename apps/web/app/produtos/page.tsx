@@ -55,6 +55,7 @@ export default function ProdutosPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("");
   const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
+  const [formPriceOnRequest, setFormPriceOnRequest] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   // O formulário fica no topo da lista; ao abrir (novo ou "Editar" num
@@ -140,6 +141,10 @@ export default function ProdutosPage() {
   const categories = storeSettings?.categories ?? [];
 
   async function saveCategories(next: StoreCategory[]): Promise<boolean> {
+    return saveStore({ categories: next });
+  }
+
+  async function saveStore(patch: Partial<StoreSettings>): Promise<boolean> {
     if (!accessToken || !storeSettings) return false;
     setIsSavingCategories(true);
     setError(null);
@@ -147,12 +152,12 @@ export default function ProdutosPage() {
       const saved = await apiFetch<StoreAdminResponse>(`${orgPath}/store`, {
         method: "PUT",
         accessToken,
-        body: JSON.stringify({ ...storeSettings, categories: next }),
+        body: JSON.stringify({ ...storeSettings, ...patch }),
       });
       setStoreSettings({ ...saved.settings, categories: saved.settings.categories ?? [] });
       return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao salvar categorias.");
+      setError(err instanceof ApiError ? err.message : "Falha ao salvar na loja.");
       return false;
     } finally {
       setIsSavingCategories(false);
@@ -198,6 +203,7 @@ export default function ProdutosPage() {
     setPhotoUrls([]);
     setStockQuantity("");
     setFormCategoryIds([]);
+    setFormPriceOnRequest(false);
     setMode("completo");
     setEditingId(null);
     setShowForm(false);
@@ -248,6 +254,7 @@ export default function ProdutosPage() {
     setPhotoUrls(product.photo_urls ?? []);
     setStockQuantity(product.stock_quantity != null ? String(product.stock_quantity) : "");
     setFormCategoryIds(categories.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id));
+    setFormPriceOnRequest(storeSettings?.price_on_request_product_ids?.includes(product.id) ?? false);
     setMode(product.manual_price != null ? "simples" : "completo");
     setShowForm(true);
   }
@@ -281,8 +288,16 @@ export default function ProdutosPage() {
         productId = created.id;
       }
       if (productId && storeSettings) {
+        const patch: Partial<StoreSettings> = {};
         const next = assignProduct(categories, productId, formCategoryIds);
-        if (next.some((c, i) => c !== categories[i])) await saveCategories(next);
+        if (next.some((c, i) => c !== categories[i])) patch.categories = next;
+        const onRequest = storeSettings.price_on_request_product_ids ?? [];
+        if (onRequest.includes(productId) !== formPriceOnRequest) {
+          patch.price_on_request_product_ids = formPriceOnRequest
+            ? [...onRequest, productId]
+            : onRequest.filter((id) => id !== productId);
+        }
+        if (Object.keys(patch).length > 0) await saveStore(patch);
       }
       resetForm();
       await load();
@@ -544,6 +559,23 @@ export default function ProdutosPage() {
             </div>
 
             {storeSettings && (
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-800 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={formPriceOnRequest}
+                  onChange={(e) => setFormPriceOnRequest(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-blue-600"
+                />
+                <span>
+                  <span className="block text-sm">Preço a consultar na loja</span>
+                  <span className="block text-xs text-neutral-500">
+                    O cliente vê “Preço a consultar” em vez do valor e combina pelo WhatsApp.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {storeSettings && (
               <div className="space-y-1.5">
                 <label className="block text-xs text-neutral-500">Categorias (pode marcar mais de uma)</label>
                 {categories.length === 0 ? (
@@ -732,6 +764,10 @@ export default function ProdutosPage() {
                       )}
                     </div>
                   </div>
+
+                  {storeSettings?.price_on_request_product_ids?.includes(product.id) && (
+                    <p className="text-xs text-purple-300">Na loja: preço a consultar</p>
+                  )}
 
                   {categories.some((c) => c.product_ids.includes(product.id)) && (
                     <div className="flex flex-wrap gap-1">

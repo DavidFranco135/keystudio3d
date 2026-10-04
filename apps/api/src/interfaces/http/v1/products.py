@@ -204,6 +204,13 @@ def update_product(
                 if payload.materials is not None
                 else None
             ),
+            # Só o que veio no corpo como null explícito é apagado; campo
+            # ausente continua "não mexer" (o Catálogo manda só fotos).
+            clear=frozenset(
+                name
+                for name in product_use_cases.CLEARABLE_PRODUCT_FIELDS
+                if name in payload.model_fields_set and getattr(payload, name) is None
+            ),
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc

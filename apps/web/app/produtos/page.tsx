@@ -235,6 +235,19 @@ export default function ProdutosPage() {
     setPhotoUrls((urls) => [url, ...urls.filter((u) => u !== url)]);
   }
 
+  // Passa para preço digitado à mão, já preenchido com o preço calculado
+  // (para o usuário só ajustar em vez de começar do zero).
+  function switchToManualPrice(productId: string | null = editingId) {
+    setMode("simples");
+    const suggested = productId ? costs[productId]?.suggested_price : undefined;
+    setManualPrice((current) => current || (suggested != null ? suggested.toFixed(2) : ""));
+  }
+
+  function startEditWithManualPrice(product: Product) {
+    startEdit(product);
+    switchToManualPrice(product.id);
+  }
+
   function startEdit(product: Product) {
     setEditingId(product.id);
     setName(product.name);
@@ -508,7 +521,7 @@ export default function ProdutosPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setMode("simples")}
+                onClick={() => switchToManualPrice()}
                 className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
                   mode === "simples"
                     ? "border-blue-500 bg-blue-950 text-blue-200"
@@ -518,10 +531,22 @@ export default function ProdutosPage() {
                 Simples (manual)
               </button>
             </div>
-            {mode === "simples" && (
+            {mode === "simples" ? (
               <p className="text-xs text-neutral-500">
                 Só nome e preço — sem máquina, material ou perfil de custo.
               </p>
+            ) : (
+              editingId &&
+              costs[editingId] && (
+                <p className="text-xs text-neutral-400">
+                  Preço calculado hoje:{" "}
+                  <span className="font-medium text-green-400">{formatCurrency(costs[editingId]!.suggested_price)}</span>{" "}
+                  (custo {formatCurrency(costs[editingId]!.production_cost)}).{" "}
+                  <button type="button" onClick={() => switchToManualPrice()} className="text-blue-400 hover:underline">
+                    Prefiro digitar o preço
+                  </button>
+                </p>
+              )
             )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -799,7 +824,7 @@ export default function ProdutosPage() {
                   ) : cost ? (
                     <div className="flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
                       <span className="text-neutral-400">Custo: {formatCurrency(cost.production_cost)}</span>
-                      <span className="font-medium text-green-400">Venda: {formatCurrency(cost.suggested_price)}</span>
+                      <span className="font-medium text-green-400">Venda (calculada): {formatCurrency(cost.suggested_price)}</span>
                     </div>
                   ) : (
                     <p className="border-t border-neutral-800 pt-2 text-xs text-neutral-600">
@@ -811,6 +836,14 @@ export default function ProdutosPage() {
                     <button onClick={() => startEdit(product)} className="text-xs text-blue-400 hover:underline">
                       Editar
                     </button>
+                    {!isManual && (
+                      <button
+                        onClick={() => startEditWithManualPrice(product)}
+                        className="text-xs text-green-400 hover:underline"
+                      >
+                        Definir preço
+                      </button>
+                    )}
                     <button onClick={() => handleDelete(product)} className="text-xs text-red-400 hover:underline">
                       Excluir
                     </button>

@@ -90,6 +90,11 @@ def list_product_materials(
     return [{"material_id": line.material_id, "quantity_g": line.quantity_g} for line in lines]
 
 
+CLEARABLE_PRODUCT_FIELDS = frozenset(
+    {"manual_price", "stock_quantity", "print_time_hours", "machine_id", "size", "description"}
+)
+
+
 def update_product(
     db: Session,
     *,
@@ -105,8 +110,14 @@ def update_product(
     photo_focus: list[dict] | None = None,
     stock_quantity: int | None = None,
     materials: list[dict] | None,
+    clear: frozenset[str] = frozenset(),
 ) -> Product:
-    """`materials`, when provided, fully replaces the product's BOM (the
+    """`clear` lists optional fields the caller explicitly sent as null —
+    those are set to None (e.g. a product switched back from a manual price
+    to the calculated one, or stock no longer tracked). Any other None still
+    means "don't touch".
+
+    `materials`, when provided, fully replaces the product's BOM (the
 
     frontend always sends the complete, current list of lines — there is no
     partial line-level update). `photo_urls` works the same way — `None`
@@ -133,6 +144,8 @@ def update_product(
         product.photo_focus = photo_focus
     if stock_quantity is not None:
         product.stock_quantity = stock_quantity
+    for field_name in clear & CLEARABLE_PRODUCT_FIELDS:
+        setattr(product, field_name, None)
     if materials is not None:
         for line in materials:
             get_material(db, organization_id=organization_id, material_id=line["material_id"])

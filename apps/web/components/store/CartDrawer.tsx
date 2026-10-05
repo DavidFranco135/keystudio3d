@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/format";
 import { focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
 import { IconClose, IconMinus, IconPlus, IconTrash, IconWhatsapp } from "./ui";
-import { imgSrc } from "@/lib/img";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 export type CustomerInfo = { name: string; extra: string };
 
@@ -119,7 +119,7 @@ export function CartDrawer({
                       {product.photo_urls[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={imgSrc(product.photo_urls[0])}
+                          src={imgSrc(product.photo_urls[0], IMG_WIDTH.thumb)}
                           alt=""
                           className="h-full w-full object-cover"
                           style={focusStyle(product.photo_focus, product.photo_urls[0])}

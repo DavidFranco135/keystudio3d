@@ -14,7 +14,7 @@ import {
   IconWhatsapp,
   useSwipe,
 } from "./ui";
-import { imgSrc } from "@/lib/img";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 export function ProductModal({
   product,
@@ -89,7 +89,7 @@ export function ProductModal({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={src}
-                  src={imgSrc(src)}
+                  src={imgSrc(src, IMG_WIDTH.large)}
                   alt={`${product.name} - foto ${i + 1}`}
                   style={focusStyle(product.photo_focus, src)}
                   className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${

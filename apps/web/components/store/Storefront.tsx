@@ -24,7 +24,7 @@ import {
   Reveal,
   useSwipe,
 } from "./ui";
-import { imgSrc } from "@/lib/img";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 const TABS = ["Início", "Catálogo", "Como pedir", "Contato"] as const;
 
@@ -404,7 +404,7 @@ export function Storefront({ slug }: { slug: string }) {
             {settings.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={imgSrc(settings.logo_url)}
+                src={imgSrc(settings.logo_url, IMG_WIDTH.thumb)}
                 alt={storeName}
                 className="h-11 w-11 shrink-0 rounded-2xl object-cover shadow-md"
               />
@@ -507,7 +507,7 @@ export function Storefront({ slug }: { slug: string }) {
                           {c.cover && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={imgSrc(c.cover.photo_urls[0])}
+                              src={imgSrc(c.cover.photo_urls[0], IMG_WIDTH.card)}
                               alt=""
                               loading="lazy"
                               style={focusStyle(c.cover.photo_focus, c.cover.photo_urls[0])}

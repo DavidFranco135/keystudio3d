@@ -133,9 +133,9 @@ export function CartDrawer({
                     <div className="flex min-w-0 flex-1 flex-col justify-between">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="line-clamp-2 text-sm font-semibold leading-snug">{product.name}</p>
+                          <p className="break-words text-sm font-semibold leading-snug">{product.name}</p>
                           {product.size && (
-                            <p className="truncate text-xs text-[var(--muted)]">{product.size}</p>
+                            <p className="break-words text-xs text-[var(--muted)]">{product.size}</p>
                           )}
                         </div>
                         <button

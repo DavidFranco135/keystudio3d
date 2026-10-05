@@ -71,10 +71,10 @@ export function ProductCard({
 
       <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
         <div className="min-w-0 space-y-1">
-          <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-[var(--ink)]">
+          <h3 className="break-words text-[14px] font-semibold leading-snug text-[var(--ink)] sm:text-[15px]">
             {product.name}
           </h3>
-          {product.size && <p className="truncate text-xs text-[var(--muted)]">{product.size}</p>}
+          {product.size && <p className="break-words text-xs text-[var(--muted)]">{product.size}</p>}
         </div>
 
         <div className="mt-auto flex flex-col gap-2.5 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">

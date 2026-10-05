@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { StoreSlide } from "@/lib/store";
 import { IconArrowRight, IconChevronLeft, IconChevronRight, IconWhatsapp, useSwipe } from "./ui";
+import { imgSrc } from "@/lib/img";
 
 const SLIDE_MS = 5500;
 // Formato usado até a primeira foto carregar, e limites para fotos muito
@@ -100,7 +101,7 @@ export function HeroSlider({
               formato da foto não bate com o da capa (ex.: celular). */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={slide.url}
+            src={imgSrc(slide.url)}
             alt=""
             aria-hidden
             loading={i === 0 ? "eager" : "lazy"}
@@ -111,7 +112,7 @@ export function HeroSlider({
           {/* A foto em si aparece inteira, sem corte. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={slide.url}
+            src={imgSrc(slide.url)}
             alt={slide.title || storeName}
             loading={i === 0 ? "eager" : "lazy"}
             ref={i === 0 ? measureFirst : undefined}

@@ -4,6 +4,7 @@ import type { PublicProduct } from "@/lib/store";
 import { priceLabel } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { IconMinus, IconPlus } from "./ui";
+import { imgSrc } from "@/lib/img";
 
 export function ProductCard({
   product,
@@ -30,7 +31,7 @@ export function ProductCard({
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={cover}
+            src={imgSrc(cover)}
             alt={product.name}
             loading="lazy"
             style={focusStyle(product.photo_focus, cover)}

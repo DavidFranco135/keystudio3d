@@ -100,7 +100,7 @@ export function CartDrawer({
                 onClose();
                 onBrowse();
               }}
-              className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--accent-ink)] transition hover:-translate-y-0.5"
+              className="fx-btn rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--accent-ink)] transition hover:-translate-y-0.5"
             >
               Ver catálogo
             </button>
@@ -211,7 +211,7 @@ export function CartDrawer({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={onSent}
-                className="flex h-13 items-center justify-center gap-2 rounded-full bg-[#25d366] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#25d366]/30 transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0"
+                className="fx-btn fx-glow-wa flex h-13 items-center justify-center gap-2 rounded-full bg-[#25d366] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#25d366]/30 transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0"
               >
                 <IconWhatsapp className="h-5 w-5" />
                 Enviar pedido pelo WhatsApp

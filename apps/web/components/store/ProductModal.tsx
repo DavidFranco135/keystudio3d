@@ -139,7 +139,7 @@ export function ProductModal({
         <div className="flex flex-col gap-5 p-6 sm:p-8">
           <div className="space-y-2 pr-8">
             {product.featured && (
-              <span className="inline-block rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+              <span className="fx-shine inline-block rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
                 Destaque
               </span>
             )}
@@ -217,7 +217,7 @@ export function ProductModal({
             {product.available && (
               <button
                 onClick={() => onSave(qty, note.trim())}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 text-sm font-semibold text-[var(--accent-ink)] shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+                className="fx-btn inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 text-sm font-semibold text-[var(--accent-ink)] shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
               >
                 {line ? "Atualizar no pedido" : "Adicionar ao pedido"}
                 {product.price_on_request ? "" : ` · ${priceLabel(product, qty)}`}

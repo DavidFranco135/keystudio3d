@@ -22,7 +22,7 @@ export function ProductCard({
   const cover = product.photo_urls[0];
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_1px_0_rgba(0,0,0,0.02)] transition duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:shadow-[0_24px_50px_-24px_rgba(0,0,0,0.35)]">
+    <article className="fx-spotlight group relative flex flex-col overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_1px_0_rgba(0,0,0,0.02)] transition duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:shadow-[0_24px_50px_-24px_rgba(0,0,0,0.35)]">
       <button
         onClick={onOpen}
         aria-label={`Ver ${product.name}`}
@@ -47,7 +47,7 @@ export function ProductCard({
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
         <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
           {product.featured && product.available && (
-            <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-ink)] shadow">
+            <span className="fx-shine rounded-full bg-[var(--accent)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-ink)] shadow">
               Destaque
             </span>
           )}
@@ -109,7 +109,7 @@ export function ProductCard({
           ) : (
             <button
               onClick={onAdd}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+              className="fx-btn inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
             >
               <IconPlus className="h-4 w-4" />
               Adicionar

@@ -32,3 +32,146 @@
     font-size: 19px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Loja pública: efeitos (components/store/fx.ts liga as classes).
+   Tudo é decorativo e não muda tamanho nem posição de nada; com "reduzir
+   movimento" ligado no aparelho, só os estados estáticos ficam.
+   --------------------------------------------------------------------------- */
+
+.store-fx :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 9999px;
+}
+
+/* Barra de progresso de rolagem + sombra do cabeçalho ao rolar */
+.store-fx .fx-header {
+  transition: box-shadow 0.4s ease, background-color 0.4s ease;
+}
+.store-fx .fx-header.is-scrolled {
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.45);
+}
+.store-fx .fx-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: 100%;
+  transform-origin: left;
+  transform: scaleX(var(--fx-scroll, 0));
+  background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent));
+  box-shadow: 0 0 12px var(--accent-ring);
+  pointer-events: none;
+}
+
+/* Botões principais: halo, pressão, brilho que atravessa e onda no clique */
+.store-fx .fx-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, filter 0.25s ease;
+}
+.store-fx .fx-btn:hover {
+  box-shadow: 0 12px 32px -12px var(--accent), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+.store-fx .fx-btn.fx-glow-wa:hover {
+  box-shadow: 0 12px 32px -10px #25d366;
+}
+.store-fx .fx-btn:active {
+  transform: scale(0.96);
+  filter: brightness(1.05);
+}
+.store-fx .fx-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.38) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.store-fx .fx-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: currentColor;
+  opacity: 0.28;
+  transform: scale(0);
+}
+
+/* Cards: luz que segue o ponteiro + borda iluminada */
+.store-fx .fx-spotlight {
+  position: relative;
+}
+.store-fx .fx-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background:
+    radial-gradient(420px circle at var(--fx-x, 50%) var(--fx-y, 50%), var(--accent-ring), transparent 45%);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  z-index: 2;
+}
+@media (hover: hover) {
+  .store-fx .fx-spotlight:hover::after {
+    opacity: 1;
+  }
+}
+
+/* Selo "Destaque": reflexo periódico */
+.store-fx .fx-shine {
+  position: relative;
+  overflow: hidden;
+}
+.store-fx .fx-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.65) 50%, transparent 75%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+
+/* Fotos: surgem desfocadas e entram em foco (só depois que o script assumiu) */
+.store-fx.fx-ready main img:not(.is-loaded) {
+  opacity: 0;
+  filter: blur(14px);
+}
+.store-fx.fx-ready main img {
+  transition: opacity 0.6s ease, filter 0.8s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .store-fx .fx-btn:hover::before {
+    animation: fx-sweep 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .store-fx .fx-ripple {
+    animation: fx-ripple 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .store-fx .fx-shine::after {
+    animation: fx-sweep 1.2s ease-in-out 1.5s infinite;
+    animation-duration: 4.5s;
+  }
+  .store-fx .fx-pulse {
+    animation: fx-pulse 2.4s ease-out infinite;
+  }
+}
+
+@keyframes fx-sweep {
+  0% { transform: translateX(-130%); }
+  25%, 100% { transform: translateX(130%); }
+}
+@keyframes fx-ripple {
+  to { transform: scale(1); opacity: 0; }
+}
+@keyframes fx-pulse {
+  0% { box-shadow: 0 0 0 0 var(--accent-ring), 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
+  70% { box-shadow: 0 0 0 16px transparent, 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
+  100% { box-shadow: 0 0 0 0 transparent, 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
+}

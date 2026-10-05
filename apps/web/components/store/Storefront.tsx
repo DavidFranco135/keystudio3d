@@ -8,6 +8,7 @@ import { formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/li
 import { focusStyle } from "@/lib/focus";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
 import { FeaturedSlider } from "./FeaturedSlider";
+import { useStoreFx } from "./fx";
 import { HeroSlider } from "./HeroSlider";
 import { ProductCard } from "./ProductCard";
 import { ProductModal } from "./ProductModal";
@@ -184,6 +185,8 @@ export function Storefront({ slug }: { slug: string }) {
   const [category, setCategory] = useState<string | null>(null);
   const [question, setQuestion] = useState({ name: "", text: "" });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useStoreFx(rootRef, store !== null);
 
   useEffect(() => {
     let cancelled = false;
@@ -396,9 +399,10 @@ export function Storefront({ slug }: { slug: string }) {
   return (
     <div
       style={vars}
-      className="min-h-screen bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
+      ref={rootRef}
+      className="store-fx min-h-screen bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
     >
-      <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
+      <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button onClick={() => goTab(0)} className="flex min-w-0 items-center gap-3 text-left">
             {settings.logo_url ? (
@@ -439,7 +443,7 @@ export function Storefront({ slug }: { slug: string }) {
             <button
               onClick={() => setCartOpen(true)}
               aria-label="Abrir pedido"
-              className="relative flex h-10 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+              className="fx-btn relative flex h-10 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
             >
               <IconCart className="h-5 w-5" />
               <span className="hidden sm:inline">Pedido</span>
@@ -502,7 +506,7 @@ export function Storefront({ slug }: { slug: string }) {
                       <Reveal key={c.id} delay={(i % 4) * 80}>
                         <button
                           onClick={() => openCategory(c.id)}
-                          className="group relative flex aspect-[5/4] w-full overflow-hidden rounded-3xl bg-[var(--accent)] text-left shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-xl"
+                          className="fx-spotlight group relative flex aspect-[5/4] w-full overflow-hidden rounded-3xl bg-[var(--accent)] text-left shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-xl"
                         >
                           {c.cover && (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -581,7 +585,7 @@ export function Storefront({ slug }: { slug: string }) {
                       href={waGeneral}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-neutral-900 shadow-xl transition hover:-translate-y-0.5"
+                      className="fx-btn inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-neutral-900 shadow-xl transition hover:-translate-y-0.5"
                     >
                       <IconWhatsapp className="h-5 w-5 text-[#25d366]" />
                       Chamar no WhatsApp
@@ -701,7 +705,7 @@ export function Storefront({ slug }: { slug: string }) {
               <div className="flex justify-center">
                 <button
                   onClick={() => goTab(1)}
-                  className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-8 py-4 text-sm font-semibold text-[var(--accent-ink)] shadow-lg transition hover:-translate-y-0.5"
+                  className="fx-btn inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-8 py-4 text-sm font-semibold text-[var(--accent-ink)] shadow-lg transition hover:-translate-y-0.5"
                 >
                   Começar meu pedido <IconArrowRight className="h-4 w-4" />
                 </button>
@@ -797,7 +801,7 @@ export function Storefront({ slug }: { slug: string }) {
                   />
                   <button
                     type="submit"
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-semibold text-white shadow-lg shadow-[#25d366]/25 transition hover:-translate-y-0.5"
+                    className="fx-btn fx-glow-wa flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-semibold text-white shadow-lg shadow-[#25d366]/25 transition hover:-translate-y-0.5"
                   >
                     <IconWhatsapp className="h-5 w-5" />
                     Enviar no WhatsApp
@@ -817,7 +821,7 @@ export function Storefront({ slug }: { slug: string }) {
         {units > 0 && (
           <button
             onClick={() => setCartOpen(true)}
-            className="flex animate-fade-up items-center gap-3 rounded-full bg-[var(--accent)] py-3 pl-5 pr-6 text-sm font-semibold text-[var(--accent-ink)] shadow-2xl transition hover:-translate-y-0.5"
+            className="fx-btn fx-pulse flex animate-fade-up items-center gap-3 rounded-full bg-[var(--accent)] py-3 pl-5 pr-6 text-sm font-semibold text-[var(--accent-ink)] shadow-2xl transition hover:-translate-y-0.5"
           >
             <IconCart className="h-5 w-5" />
             {units} {units === 1 ? "item" : "itens"}

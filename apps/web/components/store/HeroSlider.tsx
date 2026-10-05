@@ -155,7 +155,7 @@ export function HeroSlider({
           >
             <button
               onClick={onCatalog}
-              className="group/btn inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-neutral-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+              className="fx-btn group/btn inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-neutral-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
             >
               Ver catálogo
               <IconArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />

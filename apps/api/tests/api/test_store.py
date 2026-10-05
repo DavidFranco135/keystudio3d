@@ -171,3 +171,40 @@ def test_price_on_request_hides_the_price_publicly(client: TestClient):
     assert by_name["Sob medida"]["price"] == 0.0
     assert by_name["Chaveiro"]["price_on_request"] is False
     assert by_name["Chaveiro"]["price"] == 12.5
+
+
+def test_public_price_of_recipe_products_matches_the_product_cost(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    base = f"/api/v1/organizations/{org_id}"
+    profile = client.post(
+        f"{base}/cost-profiles",
+        json={
+            "name": "Padrão",
+            "energy_cost_per_kwh": 0.9,
+            "labor_cost_per_hour": 20.0,
+            "packaging_cost_flat": 3.0,
+            "waste_percentage": 5.0,
+            "fees_percentage": 3.0,
+            "profit_margin_percentage": 40.0,
+            "is_default": True,
+        },
+        headers=headers,
+    ).json()
+    pla = client.post(
+        f"{base}/materials", json={"name": "PLA", "type": "filament", "cost_per_kg": 120.0}, headers=headers
+    )
+    assert pla.status_code == 201, pla.text
+    pla_id = pla.json()["id"]
+    small = _product(client, org_id, headers, name="Pequeno", manual_price=None,
+                     materials=[{"material_id": pla_id, "quantity_g": 20}])
+    big = _product(client, org_id, headers, name="Grande", manual_price=None, print_time_hours=3,
+                   materials=[{"material_id": pla_id, "quantity_g": 250}])
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    by_name = {p["name"]: p["price"] for p in body["products"]}
+    for product in (small, big):
+        cost = client.get(
+            f"{base}/products/{product['id']}/cost?cost_profile_id={profile['id']}", headers=headers
+        ).json()
+        assert by_name[product["name"]] == round(cost["suggested_price"], 2)
+    assert by_name["Grande"] > by_name["Pequeno"]

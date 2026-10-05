@@ -663,6 +663,19 @@ class ProductMaterialRepository:
             )
         )
 
+    def list_for_products(
+        self, organization_id: UUID, product_ids: list[UUID]
+    ) -> dict[UUID, list[ProductMaterial]]:
+        """BOM lines of many products in one query (instead of one per product)."""
+        result: dict[UUID, list[ProductMaterial]] = {pid: [] for pid in product_ids}
+        if not product_ids:
+            return result
+        for line in self.session.scalars(
+            select(ProductMaterial).where(ProductMaterial.product_id.in_(product_ids))
+        ):
+            result.setdefault(line.product_id, []).append(line)
+        return result
+
     def create(
         self, *, organization_id: UUID, product_id: UUID, material_id: UUID, quantity_g: float
     ) -> ProductMaterial:

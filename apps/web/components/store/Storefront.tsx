@@ -166,6 +166,21 @@ function SkeletonStore() {
   );
 }
 
+// No site publicado os dados vêm do cache da Cloudflare (functions/loja-data.js),
+// que responde na hora; se essa função falhar, busca direto no servidor.
+async function loadPublicStore(slug: string): Promise<PublicStore> {
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const res = await fetch(`/loja-data?s=${encodeURIComponent(slug)}`);
+      if (res.ok) return (await res.json()) as PublicStore;
+      if (res.status === 404) throw new ApiError(404, "Loja não encontrada.");
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+    }
+  }
+  return apiFetch<PublicStore>(`/api/v1/public/stores/${encodeURIComponent(slug)}`);
+}
+
 export function Storefront({ slug }: { slug: string }) {
   const [store, setStore] = useState<PublicStore | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +205,7 @@ export function Storefront({ slug }: { slug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<PublicStore>(`/api/v1/public/stores/${encodeURIComponent(slug)}`)
+    loadPublicStore(slug)
       .then((data) => {
         if (cancelled) return;
         // Um servidor mais antigo que o site não manda as categorias; sem

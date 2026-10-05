@@ -30,6 +30,7 @@ that includes the organization id, so every such method gains an
 import-path swap for use_cases.py, which already has `organization_id` on
 hand at every call site regardless.
 """
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from uuid import UUID
 
@@ -571,6 +572,26 @@ class ProductMaterialRepository:
         return [
             self.session.hydrate(ProductMaterial, s.id, s.to_dict(), s.reference) for s in snaps
         ]
+
+    def list_for_products(
+        self, organization_id: UUID, product_ids: list[UUID]
+    ) -> dict[UUID, list[ProductMaterial]]:
+        """BOM lines of many products. Each product's lines are a separate
+        subcollection, so the reads run concurrently (network only — the
+        session bookkeeping in `hydrate` stays on this thread).
+        """
+        if not product_ids:
+            return {}
+
+        def fetch(pid: UUID):
+            return pid, list(self._collection(organization_id, pid).stream())
+
+        with ThreadPoolExecutor(max_workers=min(16, len(product_ids))) as pool:
+            fetched = list(pool.map(fetch, product_ids))
+        return {
+            pid: [self.session.hydrate(ProductMaterial, s.id, s.to_dict(), s.reference) for s in snaps]
+            for pid, snaps in fetched
+        }
 
     def create(
         self, *, organization_id: UUID, product_id: UUID, material_id: UUID, quantity_g: float

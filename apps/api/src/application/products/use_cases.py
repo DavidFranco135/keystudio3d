@@ -249,7 +249,11 @@ def compute_product_cost(
 
 
 def list_products_costs(
-    db: Session, *, organization_id: UUID, cost_profile_id: UUID
+    db: Session,
+    *,
+    organization_id: UUID,
+    cost_profile_id: UUID,
+    products: list | None = None,
 ) -> dict[UUID, CostBreakdown]:
     """Same formula as `compute_product_cost`, but for every product in the
 
@@ -261,10 +265,15 @@ def list_products_costs(
     profile = get_cost_profile(db, organization_id=organization_id, cost_profile_id=cost_profile_id)
     profile_values = _profile_values(profile)
 
-    products = ProductRepository(db).list_for_org(organization_id)
+    if products is None:
+        products = ProductRepository(db).list_for_org(organization_id)
     materials_by_id = {m.id: m for m in MaterialRepository(db).list_for_org(organization_id)}
     machines_by_id = {m.id: m for m in MachineRepository(db).list_for_org(organization_id)}
-    bom_repo = ProductMaterialRepository(db)
+    # Todas as receitas de uma vez — uma consulta por produto deixava a loja
+    # pública levando segundos para abrir.
+    boms = ProductMaterialRepository(db).list_for_products(
+        organization_id, [p.id for p in products if p.manual_price is None]
+    )
 
     result: dict[UUID, CostBreakdown] = {}
     for product in products:
@@ -273,7 +282,7 @@ def list_products_costs(
             continue
 
         material_cost = 0.0
-        for line in bom_repo.list_for_product(organization_id, product.id):
+        for line in boms.get(product.id, []):
             material = materials_by_id.get(line.material_id)
             cost_per_kg = (material.cost_per_kg if material else 0.0) or 0.0
             material_cost += (line.quantity_g / 1000.0) * cost_per_kg

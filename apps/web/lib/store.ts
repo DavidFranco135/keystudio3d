@@ -166,3 +166,13 @@ export function buildOrderMessage(
   if (customer.extra.trim()) parts.push(`*Informações adicionais:* ${customer.extra.trim()}`);
   return parts.join("\n\n");
 }
+
+// Pede à Cloudflare (functions/loja-data.js) para buscar de novo os dados da
+// loja pública logo após uma alteração no painel. Sem efeito em desenvolvimento.
+export function refreshPublicStoreCache(slug: string | undefined): void {
+  if (!slug || process.env.NODE_ENV !== "production") return;
+  // Dá ~1 s para o servidor terminar de gravar antes de buscar.
+  setTimeout(() => {
+    fetch(`/loja-data?s=${encodeURIComponent(slug)}&refresh=1`).catch(() => {});
+  }, 1000);
+}

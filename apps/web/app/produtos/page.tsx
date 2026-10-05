@@ -7,6 +7,7 @@ import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostItem } from "@/lib/types";
 import type { StoreAdminResponse, StoreCategory, StoreSettings } from "@/lib/store";
+import { refreshPublicStoreCache } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import { focusStyle } from "@/lib/focus";
 
@@ -66,6 +67,7 @@ export default function ProdutosPage() {
 
   // As categorias moram nas configurações da loja (mesmo lugar de destaque/oculto).
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [storeSlug, setStoreSlug] = useState<string | undefined>(undefined);
   const [showCategories, setShowCategories] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -93,6 +95,7 @@ export default function ProdutosPage() {
       ]);
       setProducts(productsData);
       setStoreSettings(store ? { ...store.settings, categories: store.settings.categories ?? [] } : null);
+      setStoreSlug(store?.slug);
       setMaterials(materialsData);
       setMachines(machinesData);
       setCostProfiles(profilesData);
@@ -155,6 +158,7 @@ export default function ProdutosPage() {
         body: JSON.stringify({ ...storeSettings, ...patch }),
       });
       setStoreSettings({ ...saved.settings, categories: saved.settings.categories ?? [] });
+      refreshPublicStoreCache(saved.slug);
       return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao salvar na loja.");
@@ -313,6 +317,7 @@ export default function ProdutosPage() {
         if (Object.keys(patch).length > 0) await saveStore(patch);
       }
       resetForm();
+      refreshPublicStoreCache(storeSlug);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao salvar produto.");
@@ -327,6 +332,7 @@ export default function ProdutosPage() {
     setError(null);
     try {
       await apiFetch(`${orgPath}/products/${product.id}`, { method: "DELETE", accessToken });
+      refreshPublicStoreCache(storeSlug);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao excluir produto.");

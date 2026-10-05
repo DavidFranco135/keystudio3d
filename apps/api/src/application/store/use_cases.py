@@ -62,14 +62,23 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
         raise OrganizationNotFoundError(slug)
     settings = _load_settings(org.settings)
 
+    hidden_ids = set(settings.hidden_product_ids)
+    all_products = ProductRepository(db).list_for_org(org.id)
+    visible_products = [
+        p for p in all_products if p.is_active and str(p.id) not in hidden_ids
+    ]
     default_profile = CostProfileRepository(db).get_default(org.id)
     computed = (
-        list_products_costs(db, organization_id=org.id, cost_profile_id=default_profile.id)
+        list_products_costs(
+            db,
+            organization_id=org.id,
+            cost_profile_id=default_profile.id,
+            products=visible_products,
+        )
         if default_profile is not None
         else {}
     )
 
-    hidden = set(settings.hidden_product_ids)
     featured = set(settings.featured_product_ids)
     on_request = set(settings.price_on_request_product_ids)
     named_categories = [c for c in settings.categories if c.name.strip()]
@@ -78,9 +87,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
         for product_id in category.product_ids:
             categories_of.setdefault(product_id, []).append(category.id)
     products: list[PublicProduct] = []
-    for product in ProductRepository(db).list_for_org(org.id):
-        if not product.is_active or str(product.id) in hidden:
-            continue
+    for product in visible_products:
         if product.manual_price is not None:
             price = product.manual_price
         elif product.id in computed:

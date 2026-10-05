@@ -7,7 +7,13 @@ import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { Product } from "@/lib/types";
 import type { StoreAdminResponse, StoreSettings } from "@/lib/store";
-import { ACCENTS, DEFAULT_WHATSAPP, formatWhatsappDisplay, normalizeWhatsapp } from "@/lib/store";
+import {
+  ACCENTS,
+  DEFAULT_WHATSAPP,
+  formatWhatsappDisplay,
+  normalizeWhatsapp,
+  refreshPublicStoreCache,
+} from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 
 const EMPTY: StoreSettings = {
@@ -214,7 +220,8 @@ export default function LojaAdminPage() {
       });
       setSettings({ ...EMPTY, ...saved.settings });
       setDirty(false);
-      setMessage("Alterações salvas. A loja pública atualiza em até 30 segundos.");
+      refreshPublicStoreCache(saved.slug);
+      setMessage("Alterações salvas. A loja pública atualiza em alguns segundos.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao salvar.");
     } finally {

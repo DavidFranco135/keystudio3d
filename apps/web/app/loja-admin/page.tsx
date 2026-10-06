@@ -15,6 +15,9 @@ import {
   refreshPublicStoreCache,
 } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesSearch } from "@/lib/search";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 const EMPTY: StoreSettings = {
   display_name: "",
@@ -67,6 +70,8 @@ export default function LojaAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
 
@@ -198,6 +203,21 @@ export default function LojaAdminPage() {
             }
       ),
     });
+  }
+
+  const listedProducts = products.filter((p) => {
+    const hidden = settings.hidden_product_ids.includes(p.id);
+    return (
+      matchesSearch(productSearch, p.name, p.description) &&
+      (visibilityFilter === "all" || (visibilityFilter === "hidden") === hidden)
+    );
+  });
+
+  // Mostra/oculta de uma vez todos os produtos que estão na lista filtrada.
+  function setVisibilityForListed(visible: boolean) {
+    const ids = new Set(listedProducts.map((p) => p.id));
+    const others = settings.hidden_product_ids.filter((id) => !ids.has(id));
+    update({ hidden_product_ids: visible ? others : [...others, ...ids] });
   }
 
   async function handleSave() {
@@ -510,11 +530,64 @@ export default function LojaAdminPage() {
             </Card>
 
             <Card title="Produtos na loja" hint="Escolha o que aparece e o que fica em destaque. O preço mostrado ao cliente é o preço de venda; custos nunca são exibidos.">
+              {products.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <SearchInput value={productSearch} onChange={setProductSearch} className="sm:flex-1" />
+                    <div className="flex gap-1.5">
+                      {(
+                        [
+                          ["all", "Todos"],
+                          ["visible", "Na loja"],
+                          ["hidden", "Ocultos"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setVisibilityFilter(key)}
+                          aria-pressed={visibilityFilter === key}
+                          className={`rounded-full border px-3 py-1.5 text-xs ${
+                            visibilityFilter === key
+                              ? "border-blue-500 bg-blue-950 text-blue-200"
+                              : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-neutral-500">
+                      {listedProducts.length} de {products.length} produto(s) ·{" "}
+                      {products.length - settings.hidden_product_ids.filter((id) => products.some((p) => p.id === id)).length} na loja
+                    </span>
+                    {listedProducts.length > 0 && (
+                      <>
+                        <button
+                          onClick={() => setVisibilityForListed(true)}
+                          className="rounded-full border border-green-800 px-3 py-1 text-green-300 hover:bg-green-950"
+                        >
+                          Mostrar {listedProducts.length === products.length ? "todos" : "estes"} na loja
+                        </button>
+                        <button
+                          onClick={() => setVisibilityForListed(false)}
+                          className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500"
+                        >
+                          Ocultar {listedProducts.length === products.length ? "todos" : "estes"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
               {products.length === 0 ? (
                 <p className="text-sm text-neutral-500">Nenhum produto cadastrado.</p>
+              ) : listedProducts.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum produto encontrado.</p>
               ) : (
                 <ul className="divide-y divide-neutral-800">
-                  {products.map((p) => {
+                  {listedProducts.map((p) => {
                     const hidden = settings.hidden_product_ids.includes(p.id);
                     const featured = settings.featured_product_ids.includes(p.id);
                     const onRequest = settings.price_on_request_product_ids.includes(p.id);
@@ -523,7 +596,7 @@ export default function LojaAdminPage() {
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
                           {p.photo_urls[0] && (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.photo_urls[0]} alt="" className="h-full w-full object-cover" />
+                            <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
                           )}
                         </div>
                         <div className="min-w-0 flex-1 basis-40">

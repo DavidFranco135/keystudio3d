@@ -7,6 +7,9 @@ import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CostProfile, Product, ProductCostItem } from "@/lib/types";
 import { AppShell } from "@/components/AppShell";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesSearch } from "@/lib/search";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import { PhotoFramer } from "@/components/PhotoFramer";
 import { focusFor, focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
@@ -70,9 +73,7 @@ export default function CatalogoPage() {
     return () => clearTimeout(timeoutId);
   }, [status, router, load]);
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter((p) => matchesSearch(search, p.name, p.description));
 
   const viewingProduct = products.find((p) => p.id === viewingId) ?? null;
 
@@ -209,12 +210,14 @@ export default function CatalogoPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         {error && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
 
-        <input
-          placeholder="Buscar produto…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 sm:max-w-xs"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput value={search} onChange={setSearch} className="w-full sm:max-w-sm" />
+          {search && (
+            <p className="text-sm text-neutral-500">
+              {filtered.length} de {products.length} produto(s)
+            </p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {isLoading ? (
@@ -233,7 +236,7 @@ export default function CatalogoPage() {
                   <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-neutral-900">
                     {product.photo_urls.length > 0 ? (
                       <img
-                        src={product.photo_urls[0]}
+                        src={imgSrc(product.photo_urls[0], IMG_WIDTH.card)}
                         alt={product.name}
                         className="h-full w-full object-cover"
                         style={focusStyle(product.photo_focus, product.photo_urls[0])}
@@ -295,7 +298,7 @@ export default function CatalogoPage() {
             >
               {viewingProduct.photo_urls.length > 0 ? (
                 <img
-                  src={viewingProduct.photo_urls[photoIndex]}
+                  src={imgSrc(viewingProduct.photo_urls[photoIndex], IMG_WIDTH.large)}
                   alt={viewingProduct.name}
                   className="h-full w-full object-contain"
                 />

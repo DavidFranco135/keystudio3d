@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
 import { formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
+import { matchesSearch } from "@/lib/search";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
 import { FeaturedSlider } from "./FeaturedSlider";
 import { useStoreFx } from "./fx";
@@ -16,6 +17,7 @@ import {
   IconArrowRight,
   IconCart,
   IconCheck,
+  IconClose,
   IconClock,
   IconInstagram,
   IconPin,
@@ -201,6 +203,7 @@ export function Storefront({ slug }: { slug: string }) {
   const [question, setQuestion] = useState({ name: "", text: "" });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   useStoreFx(rootRef, store !== null);
 
   useEffect(() => {
@@ -320,10 +323,9 @@ export function Storefront({ slug }: { slug: string }) {
 
   const filtered = useMemo(() => {
     if (!store) return [];
-    const term = search.trim().toLowerCase();
     let list = store.products.filter(
       (p) =>
-        (!term || p.name.toLowerCase().includes(term) || (p.description ?? "").toLowerCase().includes(term)) &&
+        matchesSearch(search, p.name, p.description) &&
         (!onlyAvailable || p.available) &&
         (!category || p.category_ids.includes(category))
     );
@@ -388,6 +390,17 @@ export function Storefront({ slug }: { slug: string }) {
     goTab(1);
   };
 
+  // Lupa do cabeçalho: vai para o Catálogo e já deixa o cursor na busca.
+  const openSearch = () => {
+    if (tab === 1) {
+      searchRef.current?.focus();
+      searchRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    goTab(1);
+    setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 450);
+  };
+
   const qtyOf = (id: string) => lines.find((l) => l.id === id)?.qty ?? 0;
 
   const cardFor = (product: PublicProduct) => (
@@ -445,6 +458,14 @@ export function Storefront({ slug }: { slug: string }) {
           <TabBar tab={tab} onChange={goTab} catalogCount={store.products.length} className="hidden md:inline-flex" />
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={openSearch}
+              aria-label="Buscar produto"
+              title="Buscar produto"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] transition hover:border-[var(--accent)] hover:text-[var(--accent)] active:scale-95"
+            >
+              <IconSearch className="h-5 w-5" />
+            </button>
             <a
               href={waGeneral}
               target="_blank"
@@ -644,11 +665,27 @@ export function Storefront({ slug }: { slug: string }) {
                 <div className="relative flex-1">
                   <IconSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted)]" />
                   <input
+                    ref={searchRef}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar produto…"
-                    className="h-12 w-full rounded-full border border-[var(--line)] bg-[var(--surface)] pl-12 pr-4 text-sm outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                    placeholder="Buscar produto pelo nome…"
+                    aria-label="Buscar produto pelo nome"
+                    inputMode="search"
+                    enterKeyHint="search"
+                    className="h-12 w-full rounded-full border border-[var(--line)] bg-[var(--surface)] pl-12 pr-12 text-sm outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
                   />
+                  {search && (
+                    <button
+                      onClick={() => {
+                        setSearch("");
+                        searchRef.current?.focus();
+                      }}
+                      aria-label="Limpar busca"
+                      className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[var(--muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--ink)]"
+                    >
+                      <IconClose className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <select

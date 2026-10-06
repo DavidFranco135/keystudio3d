@@ -9,6 +9,9 @@ import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostI
 import type { StoreAdminResponse, StoreCategory, StoreSettings } from "@/lib/store";
 import { refreshPublicStoreCache } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesSearch } from "@/lib/search";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import { focusStyle } from "@/lib/focus";
 
 type BomLine = { material_id: string; quantity_g: string };
@@ -57,6 +60,9 @@ export default function ProdutosPage() {
   const [stockQuantity, setStockQuantity] = useState("");
   const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
   const [formPriceOnRequest, setFormPriceOnRequest] = useState(false);
+  const [formVisible, setFormVisible] = useState(true);
+  const [search, setSearch] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   const formRef = useRef<HTMLFormElement>(null);
 
   // O formulário fica no topo da lista; ao abrir (novo ou "Editar" num
@@ -192,6 +198,25 @@ export default function ProdutosPage() {
     }
   }
 
+  const hiddenIds = storeSettings?.hidden_product_ids ?? [];
+  const isHidden = (productId: string) => hiddenIds.includes(productId);
+
+  async function toggleVisibility(product: Product) {
+    await saveStore({
+      hidden_product_ids: isHidden(product.id)
+        ? hiddenIds.filter((id) => id !== product.id)
+        : [...hiddenIds, product.id],
+    });
+  }
+
+  const visibleProducts = products.filter(
+    (product) =>
+      matchesSearch(search, product.name, product.description) &&
+      (visibilityFilter === "all" || (visibilityFilter === "hidden") === isHidden(product.id)) &&
+      (!categoryFilter ||
+        categories.some((c) => c.id === categoryFilter && c.product_ids.includes(product.id)))
+  );
+
   function toggleFormCategory(id: string) {
     setFormCategoryIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
   }
@@ -208,6 +233,7 @@ export default function ProdutosPage() {
     setStockQuantity("");
     setFormCategoryIds([]);
     setFormPriceOnRequest(false);
+    setFormVisible(true);
     setMode("completo");
     setEditingId(null);
     setShowForm(false);
@@ -272,6 +298,7 @@ export default function ProdutosPage() {
     setStockQuantity(product.stock_quantity != null ? String(product.stock_quantity) : "");
     setFormCategoryIds(categories.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id));
     setFormPriceOnRequest(storeSettings?.price_on_request_product_ids?.includes(product.id) ?? false);
+    setFormVisible(!(storeSettings?.hidden_product_ids ?? []).includes(product.id));
     setMode(product.manual_price != null ? "simples" : "completo");
     setShowForm(true);
   }
@@ -313,6 +340,12 @@ export default function ProdutosPage() {
           patch.price_on_request_product_ids = formPriceOnRequest
             ? [...onRequest, productId]
             : onRequest.filter((id) => id !== productId);
+        }
+        const hiddenNow = storeSettings.hidden_product_ids ?? [];
+        if (hiddenNow.includes(productId) === formVisible) {
+          patch.hidden_product_ids = formVisible
+            ? hiddenNow.filter((id) => id !== productId)
+            : [...hiddenNow, productId];
         }
         if (Object.keys(patch).length > 0) await saveStore(patch);
       }
@@ -487,8 +520,41 @@ export default function ProdutosPage() {
           </section>
         )}
 
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SearchInput value={search} onChange={setSearch} className="sm:max-w-sm sm:flex-1" />
+          {storeSettings && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["visible", "Na loja"],
+                  ["hidden", "Ocultos da loja"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setVisibilityFilter(key)}
+                  aria-pressed={visibilityFilter === key}
+                  className={`rounded-full border px-3 py-1.5 text-xs ${
+                    visibilityFilter === key
+                      ? "border-blue-500 bg-blue-950 text-blue-200"
+                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                  }`}
+                >
+                  {label}
+                  {key === "hidden" ? ` ${products.filter((p) => isHidden(p.id)).length}` : ""}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-between">
-          <p className="text-sm text-neutral-500">{products.length} produto(s) cadastrado(s)</p>
+          <p className="text-sm text-neutral-500">
+            {visibleProducts.length === products.length
+              ? `${products.length} produto(s) cadastrado(s)`
+              : `${visibleProducts.length} de ${products.length} produto(s)`}
+          </p>
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
@@ -588,6 +654,23 @@ export default function ProdutosPage() {
                 Deixe em branco para não controlar estoque (sempre disponível).
               </p>
             </div>
+
+            {storeSettings && (
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-800 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={formVisible}
+                  onChange={(e) => setFormVisible(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-blue-600"
+                />
+                <span>
+                  <span className="block text-sm">Mostrar na loja pública</span>
+                  <span className="block text-xs text-neutral-500">
+                    Desmarque para o produto continuar aqui no sistema, mas não aparecer para os clientes.
+                  </span>
+                </span>
+              </label>
+            )}
 
             {storeSettings && (
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-800 px-3 py-2.5">
@@ -737,24 +820,25 @@ export default function ProdutosPage() {
             <p className="text-neutral-500">Carregando…</p>
           ) : products.length === 0 ? (
             <p className="text-neutral-500">Nenhum produto cadastrado ainda.</p>
+          ) : visibleProducts.length === 0 ? (
+            <p className="text-neutral-500">Nenhum produto encontrado.</p>
           ) : (
-            products
-              .filter(
-                (product) =>
-                  !categoryFilter ||
-                  categories.some((c) => c.id === categoryFilter && c.product_ids.includes(product.id))
-              )
-              .map((product) => {
+            visibleProducts.map((product) => {
               const cost = costs[product.id];
               const isManual = product.manual_price != null;
               return (
-                <div key={product.id} className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
+                <div
+                  key={product.id}
+                  className={`space-y-2 rounded-xl border bg-neutral-950/50 p-4 ${
+                    isHidden(product.id) ? "border-dashed border-neutral-700 opacity-70" : "border-neutral-800"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 gap-3">
                       {product.photo_urls.length > 0 && (
                         <div className="relative shrink-0">
                           <img
-                            src={product.photo_urls[0]}
+                            src={imgSrc(product.photo_urls[0], IMG_WIDTH.thumb)}
                             alt=""
                             className="h-14 w-14 rounded object-cover"
                             style={focusStyle(product.photo_focus, product.photo_urls[0])}
@@ -795,6 +879,10 @@ export default function ProdutosPage() {
                       )}
                     </div>
                   </div>
+
+                  {storeSettings && isHidden(product.id) && (
+                    <p className="text-xs text-neutral-400">Oculto da loja pública</p>
+                  )}
 
                   {storeSettings?.price_on_request_product_ids?.includes(product.id) && (
                     <p className="text-xs text-purple-300">Na loja: preço a consultar</p>
@@ -838,7 +926,7 @@ export default function ProdutosPage() {
                     </p>
                   )}
 
-                  <div className="flex gap-3 border-t border-neutral-800 pt-2">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-neutral-800 pt-2">
                     <button onClick={() => startEdit(product)} className="text-xs text-blue-400 hover:underline">
                       Editar
                     </button>
@@ -848,6 +936,15 @@ export default function ProdutosPage() {
                         className="text-xs text-green-400 hover:underline"
                       >
                         Definir preço
+                      </button>
+                    )}
+                    {storeSettings && (
+                      <button
+                        onClick={() => toggleVisibility(product)}
+                        disabled={isSavingCategories}
+                        className="text-xs text-neutral-300 hover:underline disabled:opacity-50"
+                      >
+                        {isHidden(product.id) ? "Mostrar na loja" : "Ocultar da loja"}
                       </button>
                     )}
                     <button onClick={() => handleDelete(product)} className="text-xs text-red-400 hover:underline">

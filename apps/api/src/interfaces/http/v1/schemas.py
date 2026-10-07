@@ -732,7 +732,7 @@ class StoreSettings(BaseModel):
     hours: str = Field(default="", max_length=300)
     address: str = Field(default="", max_length=300)
     accent: str = Field(default="indigo", max_length=20)
-    theme: str = Field(default="light", pattern="^(light|dark)$")
+    theme: str = Field(default="light", pattern="^(light|dark|keystudio)$")
     slides: list[StoreSlide] = Field(default_factory=list, max_length=10)
     highlights: list[StoreHighlight] = Field(default_factory=list, max_length=3)
     hidden_product_ids: list[str] = Field(default_factory=list)

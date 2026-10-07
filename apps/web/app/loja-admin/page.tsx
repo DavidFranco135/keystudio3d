@@ -9,6 +9,7 @@ import type { Product } from "@/lib/types";
 import type { StoreAdminResponse, StoreSettings } from "@/lib/store";
 import {
   ACCENTS,
+  THEME_OPTIONS,
   DEFAULT_WHATSAPP,
   formatWhatsappDisplay,
   normalizeWhatsapp,
@@ -496,19 +497,31 @@ export default function LojaAdminPage() {
               </div>
               <div className="space-y-2">
                 <p className="text-xs text-neutral-500">Tema</p>
-                <div className="flex gap-2">
-                  {(["light", "dark"] as const).map((t) => (
+                <div className="flex flex-wrap gap-2">
+                  {THEME_OPTIONS.map(({ key: t, label }) => (
                     <button
                       key={t}
-                      onClick={() => update({ theme: t })}
-                      className={`rounded-lg border px-4 py-2 text-sm ${
+                      onClick={() => update(t === "keystudio" ? { theme: t, accent: "copper" } : { theme: t })}
+                      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${
                         settings.theme === t ? "border-blue-500 bg-blue-950 text-blue-200" : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
                       }`}
                     >
-                      {t === "light" ? "Claro" : "Escuro"}
+                      {t === "keystudio" && (
+                        <span
+                          aria-hidden
+                          className="h-4 w-4 rounded-full border border-[#e09060]"
+                          style={{ background: "linear-gradient(135deg, #0c0907 50%, #e09060 50%)" }}
+                        />
+                      )}
+                      {label}
                     </button>
                   ))}
                 </div>
+                {settings.theme === "keystudio" && (
+                  <p className="text-[11px] text-neutral-500">
+                    Fundo preto e destaques no cobre da logo KeyStudio3D (a cor de destaque acima é ignorada neste tema).
+                  </p>
+                )}
               </div>
             </Card>
 

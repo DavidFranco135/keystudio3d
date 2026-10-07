@@ -3,6 +3,15 @@ export type StoreHighlight = { title: string; text: string };
 export type StoreCategory = { id: string; name: string; product_ids: string[] };
 export type PublicCategory = { id: string; name: string };
 
+// "keystudio": tema da marca — preto quente e cobre, como a logo KeyStudio3D.
+export type StoreTheme = "light" | "dark" | "keystudio";
+
+export const THEME_OPTIONS: { key: StoreTheme; label: string }[] = [
+  { key: "light", label: "Claro" },
+  { key: "dark", label: "Escuro" },
+  { key: "keystudio", label: "KeyStudio – preto e cobre" },
+];
+
 export type StoreSettings = {
   display_name: string;
   logo_url: string;
@@ -13,7 +22,7 @@ export type StoreSettings = {
   hours: string;
   address: string;
   accent: string;
-  theme: "light" | "dark";
+  theme: StoreTheme;
   slides: StoreSlide[];
   highlights: StoreHighlight[];
   hidden_product_ids: string[];
@@ -85,6 +94,7 @@ export const ACCENTS: Record<string, Accent> = {
 export const THEMES = {
   light: { bg: "#faf8f5", surface: "#ffffff", ink: "#1c1917", muted: "#78716c", line: "#e7e5e4" },
   dark: { bg: "#0b0b10", surface: "#15151c", ink: "#f5f5f4", muted: "#a1a1aa", line: "#2a2a33" },
+  keystudio: { bg: "#0c0907", surface: "#17110d", ink: "#f6ede5", muted: "#b39d8c", line: "#33261c" },
 } as const;
 
 function rgba(hex: string, alpha: number): string {
@@ -92,11 +102,13 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-export function themeVars(accent: string, theme: "light" | "dark"): React.CSSProperties {
-  const a = ACCENTS[accent] ?? ACCENTS.indigo;
+export function themeVars(accent: string, theme: StoreTheme): React.CSSProperties {
+  // O tema da marca sempre usa o cobre da logo.
+  const a = theme === "keystudio" ? ACCENTS.copper : (ACCENTS[accent] ?? ACCENTS.indigo);
   const t = THEMES[theme] ?? THEMES.light;
-  const color = theme === "dark" && a.dark ? a.dark.color : a.color;
-  const ink = theme === "dark" && a.dark ? a.dark.ink : "#ffffff";
+  const isDark = theme === "dark" || theme === "keystudio";
+  const color = isDark && a.dark ? a.dark.color : a.color;
+  const ink = isDark && a.dark ? a.dark.ink : "#ffffff";
   return {
     "--bg": t.bg,
     "--surface": t.surface,
@@ -108,7 +120,8 @@ export function themeVars(accent: string, theme: "light" | "dark"): React.CSSPro
     "--bg-glass": rgba(t.bg, 0.82),
     "--surface-glass": rgba(t.surface, 0.82),
     "--accent-ring": rgba(color, 0.22),
-    "--accent-soft": theme === "dark" ? "rgba(255,255,255,0.06)" : a.soft,
+    "--accent-soft":
+      theme === "keystudio" ? rgba(color, 0.1) : theme === "dark" ? "rgba(255,255,255,0.06)" : a.soft,
   } as React.CSSProperties;
 }
 

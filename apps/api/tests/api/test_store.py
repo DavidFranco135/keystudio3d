@@ -210,3 +210,16 @@ def test_public_price_of_recipe_products_matches_the_product_cost(client: TestCl
         ).json()
         assert by_name[product["name"]] == round(cost["suggested_price"], 2)
     assert by_name["Grande"] > by_name["Pequeno"]
+
+
+def test_store_accepts_the_keystudio_brand_theme(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    response = client.put(
+        f"/api/v1/organizations/{org_id}/store",
+        json={"theme": "keystudio", "accent": "copper"},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert client.get(f"/api/v1/public/stores/{slug}").json()["settings"]["theme"] == "keystudio"
+    bad = client.put(f"/api/v1/organizations/{org_id}/store", json={"theme": "neon"}, headers=headers)
+    assert bad.status_code == 422

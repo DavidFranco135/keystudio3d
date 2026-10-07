@@ -19,6 +19,7 @@ import type {
 } from "@/lib/types";
 import { focusStyle } from "@/lib/focus";
 import { AppShell } from "@/components/AppShell";
+import { ProductPicker } from "@/components/ProductPicker";
 
 const STATUS_LABELS: Record<string, string> = {
   quote: "Orçamento",
@@ -928,16 +929,11 @@ export default function PedidosPage() {
                                 <div className="grid grid-cols-1 gap-2 rounded border border-neutral-800 bg-neutral-950/60 p-3 sm:grid-cols-2">
                                   <div className="sm:col-span-2">
                                     <label className="mb-1 block text-xs text-neutral-500">Produto</label>
-                                    <select
+                                    <ProductPicker
+                                      products={products}
                                       value={editItemProductId}
-                                      onChange={(e) => handleEditPickProduct(e.target.value)}
-                                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                                    >
-                                      <option value="">Selecione o produto…</option>
-                                      {products.map((p) => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                      ))}
-                                    </select>
+                                      onChange={handleEditPickProduct}
+                                    />
                                   </div>
                                   <div>
                                     <label className="mb-1 block text-xs text-neutral-500">Qtd.</label>
@@ -975,17 +971,12 @@ export default function PedidosPage() {
                           onSubmit={(e) => handleAddItem(order.id, e)}
                           className="grid grid-cols-1 gap-2 border-t border-neutral-800 pt-3 sm:grid-cols-2"
                         >
-                          <select
-                            required
+                          <ProductPicker
+                            products={products}
                             value={itemProductId}
-                            onChange={(e) => handlePickProduct(e.target.value)}
-                            className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm sm:col-span-2"
-                          >
-                            <option value="">Selecione o produto…</option>
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </select>
+                            onChange={handlePickProduct}
+                            className="sm:col-span-2"
+                          />
                           <input
                             type="number"
                             min={1}

@@ -62,6 +62,7 @@ export function trackPanelRoute(currentPath: string): string | null {
         currentPath === "/dashboard" &&
         saved.path !== "/dashboard" &&
         saved.path.startsWith("/") &&
+        !saved.path.startsWith("/projet") && // telas que não existem mais
         Date.now() - saved.at < LAST_ROUTE_MAX_AGE_MS
       ) {
         return saved.path;

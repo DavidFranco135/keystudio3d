@@ -51,10 +51,12 @@ function KpiCard({
   label,
   value,
   tone = "default",
+  href,
 }: {
   label: string;
   value: string;
   tone?: "default" | "positive" | "negative" | "warning";
+  href: string;
 }) {
   const toneClass =
     tone === "positive"
@@ -65,12 +67,24 @@ function KpiCard({
           ? "text-yellow-300"
           : "text-neutral-100";
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
-      <p className="text-xs text-neutral-500">{label}</p>
+    <Link
+      href={href}
+      className="group block rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 transition hover:-translate-y-0.5 hover:border-neutral-600 hover:bg-neutral-900/70 active:scale-[0.98]"
+    >
+      <p className="flex items-center justify-between text-xs text-neutral-500">
+        {label}
+        <span className="opacity-0 transition group-hover:opacity-100">→</span>
+      </p>
       <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</p>
-    </div>
+    </Link>
   );
 }
+
+const FINANCE_SLICES = [
+  { name: "Receita", tipo: "receita", color: "#34d399" },
+  { name: "Custo", tipo: "custo", color: "#60a5fa" },
+  { name: "Despesa", tipo: "despesa", color: "#f87171" },
+] as const;
 
 export default function DashboardPage() {
   const { status, accessToken, currentOrganizationId } = useAuth();
@@ -115,6 +129,7 @@ export default function DashboardPage() {
 
   const ordersChartData = data
     ? Object.entries(data.orders_by_status).map(([key, value]) => ({
+        key,
         status: ORDER_STATUS_LABELS[key] ?? key,
         total: value,
       }))
@@ -141,32 +156,36 @@ export default function DashboardPage() {
             )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <KpiCard label="Receita" value={formatCurrency(data.financial.total_revenue)} tone="positive" />
-              <KpiCard label="Custo" value={formatCurrency(data.financial.total_cost)} />
-              <KpiCard label="Despesa" value={formatCurrency(data.financial.total_expense)} />
+              <KpiCard label="Receita" value={formatCurrency(data.financial.total_revenue)} tone="positive" href="/financeiro?tipo=receita" />
+              <KpiCard label="Custo" value={formatCurrency(data.financial.total_cost)} href="/financeiro?tipo=custo" />
+              <KpiCard label="Despesa" value={formatCurrency(data.financial.total_expense)} href="/financeiro?tipo=despesa" />
               <KpiCard
                 label="Lucro"
                 value={formatCurrency(data.financial.profit)}
                 tone={data.financial.profit >= 0 ? "positive" : "negative"}
+                href="/financeiro"
               />
-              <KpiCard label="A receber" value={formatCurrency(data.financial.pending_receivables)} tone="warning" />
-              <KpiCard label="A pagar" value={formatCurrency(data.financial.pending_payables)} tone="warning" />
+              <KpiCard label="A receber" value={formatCurrency(data.financial.pending_receivables)} tone="warning" href="/financeiro?pendentes=receber" />
+              <KpiCard label="A pagar" value={formatCurrency(data.financial.pending_payables)} tone="warning" href="/financeiro?pendentes=pagar" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <KpiCard label="Pedidos" value={String(totalOrders)} />
-              <KpiCard label="Clientes" value={String(data.customers_count)} />
-              <KpiCard label="Projetos" value={String(data.projects_count)} />
+            <div className="grid grid-cols-3 gap-3">
+              <KpiCard label="Pedidos" value={String(totalOrders)} href="/pedidos" />
+              <KpiCard label="Clientes" value={String(data.customers_count)} href="/clientes" />
               <KpiCard
                 label="Estoque baixo"
                 value={String(data.low_stock_items_count)}
                 tone={data.low_stock_items_count > 0 ? "warning" : "default"}
+                href="/estoque"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
-                <h2 className="mb-3 text-sm font-medium text-neutral-300">Pedidos por status</h2>
+                <h2 className="mb-3 flex items-center justify-between text-sm font-medium text-neutral-300">
+                  Pedidos por status
+                  <span className="text-xs font-normal text-neutral-500">toque numa barra para ver os pedidos</span>
+                </h2>
                 {ordersChartData.length === 0 ? (
                   <p className="text-sm text-neutral-500">Nenhum pedido ainda.</p>
                 ) : (
@@ -179,7 +198,15 @@ export default function DashboardPage() {
                         contentStyle={{ background: "#171717", border: "1px solid #404040", borderRadius: 8 }}
                         labelStyle={{ color: "#e5e5e5" }}
                       />
-                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                      <Bar
+                        dataKey="total"
+                        radius={[4, 4, 0, 0]}
+                        cursor="pointer"
+                        onClick={(entry) => {
+                          const key = (entry as { payload?: { key?: string } }).payload?.key;
+                          if (key) router.push(`/pedidos?status=${encodeURIComponent(key)}`);
+                        }}
+                      >
                         {ordersChartData.map((_, index) => (
                           <Cell key={index} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
                         ))}
@@ -190,24 +217,39 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
-                <h2 className="mb-3 text-sm font-medium text-neutral-300">Receita x custo x despesa</h2>
+                <h2 className="mb-3 flex items-center justify-between text-sm font-medium text-neutral-300">
+                  Receita x custo x despesa
+                  <span className="text-xs font-normal text-neutral-500">toque numa parte para ver os lançamentos</span>
+                </h2>
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie
-                      data={[
-                        { name: "Receita", value: Math.max(data.financial.total_revenue, 0) },
-                        { name: "Custo", value: Math.max(data.financial.total_cost, 0) },
-                        { name: "Despesa", value: Math.max(data.financial.total_expense, 0) },
-                      ]}
+                      data={FINANCE_SLICES.map((slice) => ({
+                        name: slice.name,
+                        tipo: slice.tipo,
+                        value: Math.max(
+                          slice.tipo === "receita"
+                            ? data.financial.total_revenue
+                            : slice.tipo === "custo"
+                              ? data.financial.total_cost
+                              : data.financial.total_expense,
+                          0
+                        ),
+                      }))}
                       dataKey="value"
                       nameKey="name"
                       innerRadius={55}
                       outerRadius={90}
                       paddingAngle={2}
+                      cursor="pointer"
+                      onClick={(entry) => {
+                        const tipo = (entry as { payload?: { tipo?: string } }).payload?.tipo;
+                        if (tipo) router.push(`/financeiro?tipo=${tipo}`);
+                      }}
                     >
-                      <Cell fill="#34d399" />
-                      <Cell fill="#60a5fa" />
-                      <Cell fill="#f87171" />
+                      {FINANCE_SLICES.map((slice) => (
+                        <Cell key={slice.tipo} fill={slice.color} />
+                      ))}
                     </Pie>
                     <Tooltip
                       formatter={(value) => formatCurrency(typeof value === "number" ? value : Number(value))}

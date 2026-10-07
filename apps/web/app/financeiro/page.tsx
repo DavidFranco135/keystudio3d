@@ -32,6 +32,20 @@ export default function FinanceiroPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
+  const [pendingFilter, setPendingFilter] = useState<"" | "receber" | "pagar">("");
+  // Filtros iniciais vindos do link (ex.: cartões do Painel). Lidos depois de
+  // montar: ao navegar dentro do app, a URL nova só existe nesse ponto.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const tipo = params.get("tipo");
+      if (tipo) setTypeFilter(tipo);
+      const pendentes = params.get("pendentes");
+      if (pendentes === "receber" || pendentes === "pagar") setPendingFilter(pendentes);
+      if (tipo || pendentes) window.history.replaceState(window.history.state, "", window.location.pathname);
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
 
   const [type, setType] = useState("receita");
   const [category, setCategory] = useState("");
@@ -68,6 +82,12 @@ export default function FinanceiroPage() {
     const timeoutId = setTimeout(load, 0);
     return () => clearTimeout(timeoutId);
   }, [status, router, load]);
+
+  const listedTransactions = transactions.filter((t) => {
+    if (pendingFilter === "receber") return !t.paid_at && t.type === "receita";
+    if (pendingFilter === "pagar") return !t.paid_at && t.type !== "receita";
+    return true;
+  });
 
   function resetForm() {
     setType("receita");
@@ -184,12 +204,23 @@ export default function FinanceiroPage() {
         )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
-            <option value="">Todos os tipos</option>
-            {FINANCE_TRANSACTION_TYPES.map((t) => (
-              <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+              <option value="">Todos os tipos</option>
+              {FINANCE_TRANSACTION_TYPES.map((t) => (
+                <option key={t} value={t}>{TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+            <select
+              value={pendingFilter}
+              onChange={(e) => setPendingFilter(e.target.value as typeof pendingFilter)}
+              className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+            >
+              <option value="">Pagos e pendentes</option>
+              <option value="receber">Só a receber (receitas pendentes)</option>
+              <option value="pagar">Só a pagar (custos e despesas pendentes)</option>
+            </select>
+          </div>
           <button
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
             className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
@@ -226,10 +257,10 @@ export default function FinanceiroPage() {
         <div className="rounded-xl border border-neutral-800 divide-y divide-neutral-800">
           {isLoading ? (
             <p className="px-4 py-6 text-center text-sm text-neutral-500">Carregando…</p>
-          ) : transactions.length === 0 ? (
+          ) : listedTransactions.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-neutral-500">Nenhum lançamento.</p>
           ) : (
-            transactions.map((t) => (
+            listedTransactions.map((t) => (
               <div key={t.id} className="flex flex-wrap items-start justify-between gap-2 p-4">
                 <div className="min-w-0 space-y-1">
                   <p className={`font-medium ${TYPE_TONE[t.type] ?? ""}`}>{TYPE_LABELS[t.type] ?? t.type}</p>

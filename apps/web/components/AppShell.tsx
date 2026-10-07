@@ -21,15 +21,6 @@ function IconHome({ className }: { className?: string }) {
   );
 }
 
-function IconBox({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className={className}>
-      <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" strokeLinejoin="round" />
-      <path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function IconClipboard({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className={className}>
@@ -141,7 +132,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/produtos", label: "Produtos", icon: IconTag },
   { href: "/catalogo", label: "Catálogo", icon: IconGrid },
   { href: "/loja-admin", label: "Minha Loja", icon: IconStore },
-  { href: "/projetos", label: "Projetos", icon: IconBox },
   { href: "/pedidos", label: "Pedidos", icon: IconClipboard },
   { href: "/clientes", label: "Clientes", icon: IconUsers },
   { href: "/estoque", label: "Estoque", icon: IconArchive },

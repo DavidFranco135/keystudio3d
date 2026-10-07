@@ -270,6 +270,20 @@ export default function PedidosPage() {
   const [dueUnit, setDueUnit] = useState<"days" | "weeks" | "months">("days");
   const [dueDate, setDueDate] = useState("");
   const [filter, setFilter] = useState<"all" | ProdKey>("all");
+  // Filtro por status vindo do link (ex.: barra do gráfico do Painel). Lido
+  // depois de montar: ao navegar dentro do app, a URL nova só existe nesse ponto.
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const wanted = new URLSearchParams(window.location.search).get("status");
+      if (!wanted) return;
+      setStatusFilter(wanted);
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    }, 0);
+    return () => clearTimeout(id);
+    // Lido de novo quando a lista termina de carregar: navegando dentro do
+    // app, a URL nova pode chegar depois da montagem.
+  }, [isLoading]);
 
   const [itemProductId, setItemProductId] = useState("");
   const [itemQuantity, setItemQuantity] = useState("1");
@@ -707,7 +721,10 @@ export default function PedidosPage() {
     }
   }
 
-  const visibleOrders = orders.filter((o) => filter === "all" || effectiveProduction(o) === filter);
+  const visibleOrders = orders.filter(
+    (o) =>
+      (filter === "all" || effectiveProduction(o) === filter) && (!statusFilter || o.status === statusFilter)
+  );
 
   if (status !== "authenticated") {
     return (
@@ -745,6 +762,23 @@ export default function PedidosPage() {
             );
           })}
         </div>
+
+        {statusFilter && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-neutral-500">Mostrando só o status:</span>
+            <button
+              onClick={() => {
+                setStatusFilter(null);
+                window.history.replaceState(window.history.state, "", window.location.pathname);
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${STATUS_TONE[statusFilter] ?? "bg-neutral-800 text-neutral-300"}`}
+            >
+              {STATUS_LABELS[statusFilter] ?? statusFilter}
+              <span aria-hidden>×</span>
+              <span className="sr-only">Remover filtro</span>
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <p className="text-sm text-neutral-500">{visibleOrders.length} pedido(s)</p>

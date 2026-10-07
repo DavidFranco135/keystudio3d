@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { trackPanelRoute } from "@/lib/drafts";
 
 type NavItem = {
   href: string;
@@ -189,6 +190,13 @@ export function AppShell({ title, children }: { title?: string; children: React.
     document.documentElement.classList.add("app-scale");
     return () => document.documentElement.classList.remove("app-scale");
   }, []);
+
+  // Se o sistema fechou o app em segundo plano, ele reabre no /dashboard:
+  // volta para a tela em que a pessoa estava.
+  useEffect(() => {
+    const back = trackPanelRoute(pathname + window.location.search);
+    if (back) router.replace(back);
+  }, [pathname, router]);
 
   const currentOrg = organizations.find(
     (m) => m.organization.id === currentOrganizationId

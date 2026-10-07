@@ -9,6 +9,7 @@ import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
 import { FeaturedSlider } from "./FeaturedSlider";
+import { SearchOverlay } from "./SearchOverlay";
 import { useStoreFx } from "./fx";
 import { HeroSlider } from "./HeroSlider";
 import { ProductCard } from "./ProductCard";
@@ -187,6 +188,8 @@ export function Storefront({ slug }: { slug: string }) {
   const [store, setStore] = useState<PublicStore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
   const [dir, setDir] = useState(1);
   const [lines, setLines] = useStoredState<CartLine[]>(`loja-cart-${slug}`, []);
   const [customer, setCustomer] = useStoredState<CustomerInfo>(`loja-customer-${slug}`, {
@@ -288,6 +291,35 @@ export function Storefront({ slug }: { slug: string }) {
   useEffect(() => {
     tabRef.current = tab;
   }, [tab]);
+
+  // Lembra a aba (o celular pode recarregar a página quando o cliente vai a
+  // outro app; ao voltar, continua onde estava).
+  const tabKey = `loja-tab-${slug}`;
+  const tabRestored = useRef(false);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      tabRestored.current = true;
+      try {
+        const saved = Number(window.sessionStorage.getItem(tabKey));
+        if (saved > 0 && saved < TABS.length) {
+          setTab(saved);
+          window.history.replaceState({ tab: saved }, "");
+        }
+      } catch {
+        // armazenamento indisponível
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, [tabKey]);
+  useEffect(() => {
+    // Só grava depois de ler o valor salvo (senão a aba inicial o apagaria).
+    if (!tabRestored.current) return;
+    try {
+      window.sessionStorage.setItem(tabKey, String(tab));
+    } catch {
+      // armazenamento indisponível
+    }
+  }, [tab, tabKey]);
 
   const goTab = useCallback(
     (next: number) => {
@@ -391,14 +423,19 @@ export function Storefront({ slug }: { slug: string }) {
   };
 
   // Lupa do cabeçalho: vai para o Catálogo e já deixa o cursor na busca.
-  const openSearch = () => {
-    if (tab === 1) {
-      searchRef.current?.focus();
-      searchRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-      return;
-    }
-    goTab(1);
-    setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 450);
+  // Lupa do cabeçalho / barra da página inicial: abre a pesquisa geral.
+  const openSearch = () => setSearchOpen(true);
+
+  // "Ver todos no catálogo": fecha a pesquisa e mostra o catálogo filtrado.
+  // O pequeno atraso deixa o "voltar" do fechamento terminar antes de trocar de aba.
+  const seeAllResults = (term: string) => {
+    setSearch(term);
+    setCategory(null);
+    setSearchOpen(false);
+    setTimeout(() => {
+      goTab(1);
+      window.scrollTo({ top: 0 });
+    }, 80);
   };
 
   const qtyOf = (id: string) => lines.find((l) => l.id === id)?.qty ?? 0;
@@ -511,6 +548,17 @@ export function Storefront({ slug }: { slug: string }) {
                   whatsappHref={waGeneral}
                   onCatalog={() => openCategory(null)}
                 />
+
+                <button
+                  onClick={openSearch}
+                  className="group flex h-14 w-full items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--surface)] px-5 text-left text-[var(--muted)] shadow-sm transition hover:border-[var(--accent)] hover:shadow-md active:scale-[0.99] sm:h-16"
+                >
+                  <IconSearch className="h-5 w-5 shrink-0 text-[var(--accent)]" />
+                  <span className="flex-1 truncate text-sm sm:text-base">O que você está procurando?</span>
+                  <span className="hidden shrink-0 rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition group-hover:brightness-110 sm:inline">
+                    Pesquisar
+                  </span>
+                </button>
 
                 {featuredProducts.length > 0 && (
                   <section className="space-y-6">
@@ -899,6 +947,14 @@ export function Storefront({ slug }: { slug: string }) {
           </div>
         </div>
       )}
+
+      <SearchOverlay
+        open={searchOpen}
+        products={store.products}
+        onClose={closeSearch}
+        onOpenProduct={(id) => setOpenProductId(id)}
+        onSeeAll={seeAllResults}
+      />
 
       {openProduct && (
         <ProductModal

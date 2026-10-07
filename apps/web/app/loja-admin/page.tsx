@@ -15,6 +15,7 @@ import {
   refreshPublicStoreCache,
 } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { SearchInput } from "@/components/SearchInput";
 import { matchesSearch } from "@/lib/search";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
@@ -74,6 +75,8 @@ export default function LojaAdminPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
+  const draftKey = `loja-admin:${currentOrganizationId}`;
+  const [restoredDraft, setRestoredDraft] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken || !currentOrganizationId) return;
@@ -84,15 +87,36 @@ export default function LojaAdminPage() {
         apiFetch<Product[]>(`${orgPath}/products`, { accessToken }),
       ]);
       setSlug(store.slug);
-      setSettings({ ...EMPTY, ...store.settings });
       setProducts(productsData);
-      setDirty(false);
+      // Alterações não salvas de antes (ex.: o celular fechou o app em segundo
+      // plano) voltam por cima do que está salvo.
+      const draft = readDraft<StoreSettings>(draftKey);
+      if (draft) {
+        setSettings({ ...EMPTY, ...store.settings, ...draft });
+        setDirty(true);
+        setRestoredDraft(true);
+      } else {
+        setSettings({ ...EMPTY, ...store.settings });
+        setDirty(false);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao carregar a loja.");
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, currentOrganizationId, orgPath]);
+  }, [accessToken, currentOrganizationId, orgPath, draftKey]);
+
+  // Guarda no aparelho o que ainda não foi salvo.
+  useEffect(() => {
+    if (dirty && currentOrganizationId) writeDraft(draftKey, settings);
+  }, [dirty, settings, draftKey, currentOrganizationId]);
+
+  function discardDraft() {
+    clearDraft(draftKey);
+    setRestoredDraft(false);
+    setMessage(null);
+    load();
+  }
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -240,6 +264,8 @@ export default function LojaAdminPage() {
       });
       setSettings({ ...EMPTY, ...saved.settings });
       setDirty(false);
+      clearDraft(draftKey);
+      setRestoredDraft(false);
       refreshPublicStoreCache(saved.slug);
       setMessage("Alterações salvas. A loja pública atualiza em alguns segundos.");
     } catch (err) {
@@ -678,7 +704,20 @@ export default function LojaAdminPage() {
       {!isLoading && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur lg:left-60">
           <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
-            <p className="text-xs text-neutral-500">{dirty ? "Alterações não salvas" : "Tudo salvo"}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <p className="text-xs text-neutral-500">
+                {restoredDraft
+                  ? "Recuperamos suas alterações não salvas"
+                  : dirty
+                    ? "Alterações não salvas (guardadas neste aparelho)"
+                    : "Tudo salvo"}
+              </p>
+              {dirty && (
+                <button onClick={discardDraft} className="shrink-0 text-xs text-neutral-400 underline hover:text-neutral-200">
+                  Descartar
+                </button>
+              )}
+            </div>
             <button
               onClick={handleSave}
               disabled={isSaving || !dirty}

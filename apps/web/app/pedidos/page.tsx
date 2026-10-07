@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch, ApiError } from "@/lib/api-client";
@@ -19,6 +19,7 @@ import type {
 } from "@/lib/types";
 import { focusStyle } from "@/lib/focus";
 import { AppShell } from "@/components/AppShell";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { ProductPicker } from "@/components/ProductPicker";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -319,6 +320,69 @@ export default function PedidosPage() {
   const [isSavingItemEdit, setIsSavingItemEdit] = useState(false);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
+
+  // Rascunho do que está sendo preenchido (novo pedido, edição de pedido e
+  // item sendo adicionado): volta se o celular fechar o app em segundo plano.
+  const draftKey = `pedidos:${currentOrganizationId}`;
+  const draftChecked = useRef(false);
+  const draft = {
+    showForm, customerId, notes, newStatus, dueMode, dueAmount, dueUnit, dueDate,
+    editingOrderId, editCustomerId, editNotes, editDueDate, editProduction, editStatus,
+    expandedOrderId, itemProductId, itemQuantity, itemUnitCost, itemUnitPrice,
+  };
+  type Draft = typeof draft;
+  const draftJson = JSON.stringify(draft);
+
+  useEffect(() => {
+    if (!currentOrganizationId || draftChecked.current) return;
+    const id = setTimeout(() => {
+      draftChecked.current = true;
+      const d = readDraft<Draft>(draftKey);
+      if (!d) return;
+      setShowForm(d.showForm);
+      setCustomerId(d.customerId);
+      setNotes(d.notes);
+      setNewStatus(d.newStatus);
+      setDueMode(d.dueMode);
+      setDueAmount(d.dueAmount);
+      setDueUnit(d.dueUnit);
+      setDueDate(d.dueDate);
+      setEditingOrderId(d.editingOrderId);
+      setEditCustomerId(d.editCustomerId);
+      setEditNotes(d.editNotes);
+      setEditDueDate(d.editDueDate);
+      setEditProduction(d.editProduction);
+      setEditStatus(d.editStatus);
+      setExpandedOrderId(d.expandedOrderId);
+      setItemProductId(d.itemProductId);
+      setItemQuantity(d.itemQuantity);
+      setItemUnitCost(d.itemUnitCost);
+      setItemUnitPrice(d.itemUnitPrice);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [currentOrganizationId, draftKey]);
+
+  useEffect(() => {
+    if (!draftChecked.current || !currentOrganizationId) return;
+    const d = JSON.parse(draftJson) as Draft;
+    const busy = d.showForm || d.editingOrderId !== null || (d.expandedOrderId !== null && d.itemProductId !== "");
+    if (busy) writeDraft(draftKey, d);
+    else clearDraft(draftKey);
+  }, [draftJson, draftKey, currentOrganizationId]);
+
+  // Pedido que estava aberto (restaurado do rascunho): carrega seus itens.
+  useEffect(() => {
+    if (!expandedOrderId || !accessToken || itemsByOrder[expandedOrderId] !== undefined) return;
+    let cancelled = false;
+    apiFetch<OrderItem[]>(`${orgPath}/orders/${expandedOrderId}/items`, { accessToken })
+      .then((data) => {
+        if (!cancelled) setItemsByOrder((prev) => ({ ...prev, [expandedOrderId]: data }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedOrderId, accessToken, itemsByOrder, orgPath]);
 
   const customerName = useCallback(
     (id: string) => customers.find((c) => c.id === id)?.name ?? "—",

@@ -110,7 +110,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((tokens) => setAccessToken(tokens.access_token))
         .catch(() => undefined);
     }, REFRESH_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+    // Em segundo plano o celular pausa o timer acima e o acesso (15 min)
+    // pode vencer; ao voltar para o app, renova na hora.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshSession()
+        .then((tokens) => setAccessToken(tokens.access_token))
+        .catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [status]);
 
   const login = useCallback(

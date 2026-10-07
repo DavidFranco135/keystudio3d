@@ -9,12 +9,30 @@ import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostI
 import type { StoreAdminResponse, StoreCategory, StoreSettings } from "@/lib/store";
 import { refreshPublicStoreCache } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { SearchInput } from "@/components/SearchInput";
 import { matchesSearch } from "@/lib/search";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import { focusStyle } from "@/lib/focus";
 
 type BomLine = { material_id: string; quantity_g: string };
+
+type ProductFormDraft = {
+  editingId: string | null;
+  mode: "simples" | "completo";
+  name: string;
+  description: string;
+  printTimeHours: string;
+  machineId: string;
+  bomLines: BomLine[];
+  manualPrice: string;
+  size: string;
+  photoUrls: string[];
+  stockQuantity: string;
+  formCategoryIds: string[];
+  formPriceOnRequest: boolean;
+  formVisible: boolean;
+};
 
 function newCategoryId(): string {
   return `cat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -82,6 +100,80 @@ export default function ProdutosPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
+
+  // Rascunho do formulário aberto: se o celular fechar o app em segundo
+  // plano, o que estava preenchido volta ao reabrir.
+  const productDraftKey = `produtos-form:${currentOrganizationId}`;
+  const draftChecked = useRef(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  useEffect(() => {
+    if (!currentOrganizationId || draftChecked.current) return;
+    const id = setTimeout(() => {
+      draftChecked.current = true;
+      const d = readDraft<ProductFormDraft>(productDraftKey);
+      if (!d) return;
+      setEditingId(d.editingId);
+      setMode(d.mode);
+      setName(d.name);
+      setDescription(d.description);
+      setPrintTimeHours(d.printTimeHours);
+      setMachineId(d.machineId);
+      setBomLines(d.bomLines.length > 0 ? d.bomLines : [{ material_id: "", quantity_g: "" }]);
+      setManualPrice(d.manualPrice);
+      setSize(d.size);
+      setPhotoUrls(d.photoUrls);
+      setStockQuantity(d.stockQuantity);
+      setFormCategoryIds(d.formCategoryIds);
+      setFormPriceOnRequest(d.formPriceOnRequest);
+      setFormVisible(d.formVisible);
+      setShowForm(true);
+      setDraftRestored(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [currentOrganizationId, productDraftKey]);
+
+  useEffect(() => {
+    if (!draftChecked.current || !currentOrganizationId) return;
+    if (!showForm) {
+      clearDraft(productDraftKey);
+      return;
+    }
+    writeDraft<ProductFormDraft>(productDraftKey, {
+      editingId,
+      mode,
+      name,
+      description,
+      printTimeHours,
+      machineId,
+      bomLines,
+      manualPrice,
+      size,
+      photoUrls,
+      stockQuantity,
+      formCategoryIds,
+      formPriceOnRequest,
+      formVisible,
+    });
+  }, [
+    currentOrganizationId,
+    productDraftKey,
+    showForm,
+    editingId,
+    mode,
+    name,
+    description,
+    printTimeHours,
+    machineId,
+    bomLines,
+    manualPrice,
+    size,
+    photoUrls,
+    stockQuantity,
+    formCategoryIds,
+    formPriceOnRequest,
+    formVisible,
+  ]);
 
   const materialName = useCallback(
     (id: string) => materials.find((m) => m.id === id)?.name ?? "—",
@@ -237,6 +329,7 @@ export default function ProdutosPage() {
     setMode("completo");
     setEditingId(null);
     setShowForm(false);
+    setDraftRestored(false);
   }
 
   async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -574,6 +667,9 @@ export default function ProdutosPage() {
                 {editingId
                   ? `Editando: ${products.find((p) => p.id === editingId)?.name ?? "produto"}`
                   : "Novo produto"}
+                {draftRestored && (
+                  <span className="ml-2 text-xs font-normal text-yellow-400">· rascunho recuperado</span>
+                )}
               </h2>
               <button type="button" onClick={resetForm} className="shrink-0 text-sm text-neutral-400 hover:underline">
                 Cancelar

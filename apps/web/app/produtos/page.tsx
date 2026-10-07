@@ -17,6 +17,25 @@ import { focusStyle } from "@/lib/focus";
 
 type BomLine = { material_id: string; quantity_g: string };
 
+// Linhas da conta de preço, na ordem da fórmula (domain/calculator/engine.py).
+const CALC_ROWS: { key: keyof ProductCost; label: string }[] = [
+  { key: "material_cost", label: "Material (+ itens extras)" },
+  { key: "waste_cost", label: "Desperdício" },
+  { key: "energy_cost", label: "Energia" },
+  { key: "machine_cost", label: "Máquina / depreciação" },
+  { key: "labor_cost", label: "Mão de obra" },
+  { key: "packaging_cost", label: "Embalagem" },
+  { key: "fees", label: "Taxas" },
+  { key: "production_cost", label: "= Custo de produção" },
+];
+
+function marginOf(b: Partial<ProductCost>): number | null {
+  const production = Number(b.production_cost ?? 0);
+  if (!production) return null;
+  const beforeTax = Number(b.suggested_price ?? 0) - Number(b.tax_amount ?? 0);
+  return (beforeTax / production - 1) * 100;
+}
+
 type ProductFormDraft = {
   editingId: string | null;
   mode: "simples" | "completo";
@@ -57,6 +76,7 @@ export default function ProdutosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [showAudit, setShowAudit] = useState(false);
+  const [calcOpenId, setCalcOpenId] = useState<string | null>(null);
   const [isFixingPrices, setIsFixingPrices] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -1186,9 +1206,111 @@ export default function ProdutosPage() {
                       <span className="font-medium text-green-400">{formatCurrency(product.manual_price)}</span>
                     </div>
                   ) : cost ? (
-                    <div className="flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
-                      <span className="text-neutral-400">Custo: {formatCurrency(cost.production_cost)}</span>
-                      <span className="font-medium text-green-400">Venda (calculada): {formatCurrency(cost.suggested_price)}</span>
+                    <div className="space-y-2 border-t border-neutral-800 pt-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-400">Custo: {formatCurrency(cost.production_cost)}</span>
+                        <span className="font-medium text-green-400">Venda (calculada): {formatCurrency(cost.suggested_price)}</span>
+                      </div>
+                      <button
+                        onClick={() => setCalcOpenId(calcOpenId === product.id ? null : product.id)}
+                        className="text-xs text-neutral-400 underline hover:text-neutral-200"
+                      >
+                        {calcOpenId === product.id ? "Fechar cálculo" : "Ver cálculo"}
+                      </button>
+                      {calcOpenId === product.id &&
+                        (() => {
+                          const piece = pieceByName.get(normalizeSearch(product.name));
+                          const snap = (piece?.cost_breakdown_snapshot ?? null) as Partial<ProductCost> | null;
+                          const profile = costProfiles.find((cp) => cp.is_default) ?? costProfiles[0];
+                          const machine = machines.find((m) => m.id === product.machine_id);
+                          const col = (v: unknown) => (v == null ? "—" : formatCurrency(Number(v)));
+                          const productMargin = marginOf(cost);
+                          const pieceMargin = snap ? marginOf(snap) : null;
+                          return (
+                            <div className="space-y-2 rounded border border-neutral-800 bg-neutral-950/70 p-2 text-xs">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="text-neutral-500">
+                                    <th className="py-1 text-left font-normal"></th>
+                                    <th className="py-1 text-right font-normal">Este produto</th>
+                                    {snap && <th className="py-1 text-right font-normal">Precificação</th>}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {CALC_ROWS.map(({ key, label }) => {
+                                    const differs = snap && Math.abs(Number(cost[key] ?? 0) - Number(snap[key] ?? 0)) >= 0.01;
+                                    return (
+                                      <tr key={key} className={key === "production_cost" ? "border-t border-neutral-800 font-medium" : ""}>
+                                        <td className="py-0.5 text-neutral-400">{label}</td>
+                                        <td className={`py-0.5 text-right ${differs ? "text-yellow-300" : ""}`}>{col(cost[key])}</td>
+                                        {snap && <td className="py-0.5 text-right">{col(snap[key])}</td>}
+                                      </tr>
+                                    );
+                                  })}
+                                  <tr>
+                                    <td className="py-0.5 text-neutral-400">+ Margem de lucro</td>
+                                    <td className="py-0.5 text-right">{productMargin == null ? "—" : `${productMargin.toFixed(0)}%`}</td>
+                                    {snap && <td className="py-0.5 text-right">{pieceMargin == null ? "—" : `${pieceMargin.toFixed(0)}%`}</td>}
+                                  </tr>
+                                  <tr>
+                                    <td className="py-0.5 text-neutral-400">+ Imposto</td>
+                                    <td className="py-0.5 text-right">{col(cost.tax_amount)}</td>
+                                    {snap && <td className="py-0.5 text-right">{col(snap.tax_amount)}</td>}
+                                  </tr>
+                                  <tr className="border-t border-neutral-800 font-semibold">
+                                    <td className="py-1 text-neutral-300">= Preço</td>
+                                    <td className="py-1 text-right text-green-400">{formatCurrency(cost.suggested_price)}</td>
+                                    {snap && (
+                                      <td className="py-1 text-right text-green-400">
+                                        {formatCurrency(piece!.final_price ?? piece!.suggested_price)}
+                                      </td>
+                                    )}
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <ul className="space-y-0.5 text-neutral-500">
+                                <li>
+                                  <span className="text-neutral-400">Este produto usa:</span>{" "}
+                                  {product.materials.length > 0
+                                    ? product.materials
+                                        .map((line) => {
+                                          const mat = materials.find((m) => m.id === line.material_id);
+                                          return `${line.quantity_g} g de ${mat?.name ?? "material"} a ${formatCurrency(mat?.cost_per_kg ?? 0)}/kg (cadastro em Materiais)`;
+                                        })
+                                        .join("; ")
+                                    : "nenhum material"}
+                                  {" · "}
+                                  {product.print_time_hours
+                                    ? `${product.print_time_hours} h de impressão${machine ? ` na ${machine.name} a ${formatCurrency(machine.cost_per_hour ?? 0)}/h (cadastro em Máquinas)` : " sem máquina"}`
+                                    : "sem tempo de impressão"}
+                                  {" · "}sem energia, mão de obra nem itens extras
+                                  {profile ? ` · margem do perfil “${profile.name}”: ${profile.profit_margin_percentage}%` : ""}
+                                </li>
+                                {piece && (
+                                  <li>
+                                    <span className="text-neutral-400">A Precificação usou:</span>{" "}
+                                    {piece.weight_g != null ? `${piece.weight_g} g` : "—"}
+                                    {piece.cost_per_kg != null ? ` a ${formatCurrency(piece.cost_per_kg)}/kg` : ""}
+                                    {(piece.extra_items ?? []).length > 0
+                                      ? ` + extras (${(piece.extra_items ?? []).map((x) => `${x.name} ${formatCurrency(x.cost)}`).join(", ")})`
+                                      : ""}
+                                    {piece.print_time_hours != null ? ` · ${piece.print_time_hours} h` : ""}
+                                    {piece.depreciation_value != null
+                                      ? ` · depreciação ${formatCurrency(piece.depreciation_value)} ${piece.depreciation_mode === "peca" ? "por peça" : "por hora"}`
+                                      : ""}
+                                    {piece.labor_hours ? ` · ${piece.labor_hours} h de mão de obra` : ""}
+                                    {piece.profit_margin_percentage != null ? ` · margem ${piece.profit_margin_percentage}%` : ""}
+                                    {piece.final_price != null ? " · preço final digitado por você" : ""}
+                                  </li>
+                                )}
+                                <li>
+                                  Em amarelo: o que difere da Precificação. Para usar o preço dela, clique em “Definir preço”
+                                  ou na Conferência de preços.
+                                </li>
+                              </ul>
+                            </div>
+                          );
+                        })()}
                     </div>
                   ) : (
                     <p className="border-t border-neutral-800 pt-2 text-xs text-neutral-500">

@@ -317,6 +317,8 @@ export type ProductCost = {
   production_cost: number;
   tax_amount: number;
   suggested_price: number;
+  // "manual" = digitado · "pricing" = da peça salva na Precificação · "recipe" = pela receita
+  source?: "manual" | "pricing" | "recipe";
 };
 
 export type ProductCostItem = ProductCost & { product_id: string };

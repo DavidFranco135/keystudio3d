@@ -489,6 +489,7 @@ class ProductCostItem(BaseModel):
     production_cost: float
     tax_amount: float
     suggested_price: float
+    source: str = "recipe"
 
 
 class ProductCostResponse(BaseModel):
@@ -502,6 +503,7 @@ class ProductCostResponse(BaseModel):
     production_cost: float
     tax_amount: float
     suggested_price: float
+    source: str = "recipe"
 
 
 class CreateInventoryItemRequest(BaseModel):

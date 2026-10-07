@@ -1,3 +1,4 @@
+import unicodedata
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from src.infrastructure.repositories import (
     MaterialRepository,
     ProductMaterialRepository,
     ProductRepository,
+    QuoteRepository,
 )
 
 
@@ -195,7 +197,49 @@ def _manual_price_breakdown(manual_price: float) -> CostBreakdown:
         production_cost=manual_price,
         tax_amount=0.0,
         suggested_price=manual_price,
+        source="manual",
     )
+
+
+def normalize_name(name: str | None) -> str:
+    """Nome para comparar produto x peça: sem acentos, maiúsculas nem espaços
+    sobrando ("SNOOP E CASA " == "Snoop e Casa")."""
+    text = unicodedata.normalize("NFD", name or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.lower().split())
+
+
+def pieces_by_name(db: Session, organization_id: UUID) -> dict[str, object]:
+    """Peças salvas na Precificação, pelo nome (a mais recente vale)."""
+    pieces: dict[str, object] = {}
+    quotes = [q for q in QuoteRepository(db).list_for_org(organization_id) if (q.piece_name or "").strip()]
+    for quote in sorted(quotes, key=lambda q: q.created_at):
+        pieces[normalize_name(quote.piece_name)] = quote
+    return pieces
+
+
+_BREAKDOWN_FIELDS = (
+    "material_cost",
+    "waste_cost",
+    "energy_cost",
+    "machine_cost",
+    "labor_cost",
+    "packaging_cost",
+    "fees",
+    "production_cost",
+    "tax_amount",
+)
+
+
+def _pricing_breakdown(quote) -> CostBreakdown:
+    """Preço do produto vindo da peça da Precificação: a conta completa dela
+    (energia, itens adicionais, mão de obra, depreciação e margem da peça), e o
+    preço final digitado na peça quando houver."""
+    snapshot = quote.cost_breakdown_snapshot or {}
+    values = {name: float(snapshot.get(name) or 0.0) for name in _BREAKDOWN_FIELDS}
+    values["production_cost"] = float(quote.production_cost or values["production_cost"])
+    price = quote.final_price if quote.final_price is not None else quote.suggested_price
+    return CostBreakdown(**values, suggested_price=float(price), source="pricing")
 
 
 def _profile_values(profile) -> CostProfileValues:
@@ -230,6 +274,10 @@ def compute_product_cost(
     product = get_product(db, organization_id=organization_id, product_id=product_id)
     if product.manual_price is not None:
         return _manual_price_breakdown(product.manual_price)
+
+    piece = pieces_by_name(db, organization_id).get(normalize_name(product.name))
+    if piece is not None:
+        return _pricing_breakdown(piece)
 
     profile = get_cost_profile(db, organization_id=organization_id, cost_profile_id=cost_profile_id)
 
@@ -310,11 +358,17 @@ def list_products_costs(
     boms = ProductMaterialRepository(db).list_for_products(
         organization_id, [p.id for p in products if p.manual_price is None]
     )
+    pieces = pieces_by_name(db, organization_id)
 
     result: dict[UUID, CostBreakdown] = {}
     for product in products:
         if product.manual_price is not None:
             result[product.id] = _manual_price_breakdown(product.manual_price)
+            continue
+
+        piece = pieces.get(normalize_name(product.name))
+        if piece is not None:
+            result[product.id] = _pricing_breakdown(piece)
             continue
 
         if not has_recipe(product, boms.get(product.id, [])):

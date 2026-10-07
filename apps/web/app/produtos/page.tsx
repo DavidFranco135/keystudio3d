@@ -1209,7 +1209,10 @@ export default function ProdutosPage() {
                     <div className="space-y-2 border-t border-neutral-800 pt-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-400">Custo: {formatCurrency(cost.production_cost)}</span>
-                        <span className="font-medium text-green-400">Venda (calculada): {formatCurrency(cost.suggested_price)}</span>
+                        <span className="font-medium text-green-400">
+                          {cost.source === "pricing" ? "Venda (da Precificação)" : "Venda (calculada)"}:{" "}
+                          {formatCurrency(cost.suggested_price)}
+                        </span>
                       </div>
                       <button
                         onClick={() => setCalcOpenId(calcOpenId === product.id ? null : product.id)}
@@ -1269,6 +1272,13 @@ export default function ProdutosPage() {
                                 </tbody>
                               </table>
                               <ul className="space-y-0.5 text-neutral-500">
+                                {cost.source === "pricing" ? (
+                                  <li className="text-green-300/80">
+                                    Este produto usa o preço da peça de mesmo nome salva na Precificação — com energia,
+                                    itens adicionais, mão de obra, depreciação e a margem da peça. Editou a peça? O preço
+                                    aqui acompanha.
+                                  </li>
+                                ) : (
                                 <li>
                                   <span className="text-neutral-400">Este produto usa:</span>{" "}
                                   {product.materials.length > 0
@@ -1286,6 +1296,7 @@ export default function ProdutosPage() {
                                   {" · "}energia pela potência da máquina{machine?.power_watts ? ` (${machine.power_watts} W)` : " (sem potência cadastrada = R$ 0)"} · sem mão de obra nem itens extras
                                   {profile ? ` · margem do perfil “${profile.name}”: ${profile.profit_margin_percentage}%` : ""}
                                 </li>
+                                )}
                                 {piece && (
                                   <li>
                                     <span className="text-neutral-400">A Precificação usou:</span>{" "}

@@ -116,6 +116,7 @@ def list_products_costs(
             production_cost=b.production_cost,
             tax_amount=b.tax_amount,
             suggested_price=b.suggested_price,
+            source=b.source,
         )
         for product_id, b in breakdowns.items()
     ]
@@ -173,6 +174,7 @@ def get_product_cost(
         production_cost=breakdown.production_cost,
         tax_amount=breakdown.tax_amount,
         suggested_price=breakdown.suggested_price,
+        source=breakdown.source,
     )
 
 

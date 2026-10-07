@@ -183,3 +183,56 @@ def test_calculated_product_price_includes_energy_like_the_pricing_screen(client
     assert single["energy_cost"] > 0
     assert round(single["suggested_price"], 2) == round(quote["suggested_price"], 2)
     assert round(listed["suggested_price"], 2) == round(quote["suggested_price"], 2)
+
+
+def test_calculated_product_uses_the_full_price_of_its_saved_piece(client: TestClient):
+    url, headers = _setup(client)
+    org_url = url.rsplit("/products", 1)[0]
+    profile = _default_profile(client, org_url, headers)
+    material = client.post(
+        f"{org_url}/materials", json={"name": "PLA", "type": "filament", "cost_per_kg": 100}, headers=headers
+    ).json()
+    # Peça com itens extras + mão de obra + margem própria (150%).
+    piece = client.post(
+        f"{org_url}/quotes",
+        json={
+            "cost_profile_id": profile["id"],
+            "piece_name": "Boneco Natal",
+            "material_cost": 5.0 + 3.5,  # material + argola/etiqueta
+            "print_time_hours": 2,
+            "machine_cost_per_hour": 1.0,
+            "energy_kwh": 0.3,
+            "labor_hours": 0.5,
+            "profit_margin_percentage": 150,
+        },
+        headers=headers,
+    ).json()
+    recipe = {"print_time_hours": 2, "materials": [{"material_id": material["id"], "quantity_g": 50}]}
+    calculated = client.post(url, json={"name": "  BONECO natal ", **recipe}, headers=headers).json()
+    typed = client.post(url, json={"name": "Boneco Natal", "manual_price": 99.0, "materials": []}, headers=headers).json()
+    other = client.post(url, json={"name": "Outro produto", **recipe}, headers=headers).json()
+
+    costs = {c["product_id"]: c for c in client.get(f"{url}/costs?cost_profile_id={profile['id']}", headers=headers).json()}
+    assert costs[calculated["id"]]["source"] == "pricing"
+    assert round(costs[calculated["id"]]["suggested_price"], 2) == round(piece["suggested_price"], 2)
+    assert costs[calculated["id"]]["labor_cost"] > 0
+    assert costs[typed["id"]]["source"] == "manual"
+    assert costs[typed["id"]]["suggested_price"] == 99.0
+    assert costs[other["id"]]["source"] == "recipe"
+
+    single = client.get(f"{url}/{calculated['id']}/cost?cost_profile_id={profile['id']}", headers=headers).json()
+    assert single["source"] == "pricing"
+    assert round(single["suggested_price"], 2) == round(piece["suggested_price"], 2)
+
+    # Preço final digitado na peça vale.
+    client.patch(f"{org_url}/quotes/{piece['id']}", json={"final_price": 45.0}, headers=headers)
+    single = client.get(f"{url}/{calculated['id']}/cost?cost_profile_id={profile['id']}", headers=headers).json()
+    assert single["suggested_price"] == 45.0
+
+    # E a loja pública mostra o mesmo preço.
+    slug = client.get("/api/v1/organizations", headers=headers).json()[0]["slug"]
+    from src.application.store import use_cases as store_use_cases
+
+    store_use_cases._public_cache.clear()
+    public = {p["id"]: p for p in client.get(f"/api/v1/public/stores/{slug}").json()["products"]}
+    assert public[calculated["id"]]["price"] == 45.0

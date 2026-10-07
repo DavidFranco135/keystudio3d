@@ -93,9 +93,12 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
         elif product.id in computed:
             price = computed[product.id].suggested_price
         else:
-            continue
+            # Sem preço definido nem receita para calcular: aparece como
+            # "Preço a consultar" em vez de sumir da loja.
+            price = None
         stock = product.stock_quantity
-        hide_price = str(product.id) in on_request
+        hide_price = str(product.id) in on_request or price is None or price <= 0
+        price = price or 0.0
         products.append(
             PublicProduct(
                 id=product.id,

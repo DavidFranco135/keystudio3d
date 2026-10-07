@@ -53,7 +53,7 @@ def test_public_store_lists_priced_products_without_auth(client: TestClient):
     org_id, slug, headers = _setup(client)
     _product(client, org_id, headers, name="Chaveiro", manual_price=12.5, photo_urls=["https://img/a.jpg"])
     _product(client, org_id, headers, name="Esgotado", manual_price=30, stock_quantity=0)
-    # No manual price and no cost profile -> no sellable price, so it is not listed.
+    # Sem preço manual nem receita: aparece como "Preço a consultar" (não some).
     _product(client, org_id, headers, name="Sem preco", manual_price=None)
 
     response = client.get(f"/api/v1/public/stores/{slug}")
@@ -61,7 +61,9 @@ def test_public_store_lists_priced_products_without_auth(client: TestClient):
     body = response.json()
     assert body["settings"]["display_name"] == "Atelie 3D"
     by_name = {p["name"]: p for p in body["products"]}
-    assert set(by_name) == {"Chaveiro", "Esgotado"}
+    assert set(by_name) == {"Chaveiro", "Esgotado", "Sem preco"}
+    assert by_name["Sem preco"]["price_on_request"] is True
+    assert by_name["Sem preco"]["price"] == 0.0
     assert by_name["Chaveiro"]["price"] == 12.5
     assert by_name["Chaveiro"]["available"] is True
     assert by_name["Esgotado"]["available"] is False

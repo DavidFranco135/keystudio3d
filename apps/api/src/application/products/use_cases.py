@@ -9,7 +9,7 @@ from src.domain.calculator.engine import calculate_quote
 from src.domain.calculator.inputs import QuoteInputs
 from src.domain.calculator.profile import CostProfileValues
 from src.domain.calculator.report import CostBreakdown
-from src.domain.shared.exceptions import ProductNotFoundError
+from src.domain.shared.exceptions import ProductNotFoundError, ProductWithoutPriceError
 from src.infrastructure.db.models import Product
 from src.infrastructure.repositories import (
     MachineRepository,
@@ -233,8 +233,15 @@ def compute_product_cost(
 
     profile = get_cost_profile(db, organization_id=organization_id, cost_profile_id=cost_profile_id)
 
+    bom = ProductMaterialRepository(db).list_for_product(organization_id, product.id)
+    if not has_recipe(product, bom):
+        raise ProductWithoutPriceError(
+            "Este produto não tem preço: defina o preço de venda ou cadastre a receita "
+            "(materiais ou tempo de impressão)."
+        )
+
     material_cost = 0.0
-    for line in ProductMaterialRepository(db).list_for_product(organization_id, product.id):
+    for line in bom:
         material = get_material(db, organization_id=organization_id, material_id=line.material_id)
         cost_per_kg = material.cost_per_kg or 0.0
         material_cost += (line.quantity_g / 1000.0) * cost_per_kg
@@ -257,6 +264,13 @@ def compute_product_cost(
         ),
         _profile_values(profile),
     )
+
+
+def has_recipe(product, bom_lines) -> bool:
+    """Há algo de produção para precificar? Sem materiais nem tempo de
+    impressão, a fórmula daria só embalagem + taxas + margem (ex.: R$ 2,50) —
+    um preço que ninguém definiu. Esses produtos ficam sem preço calculado."""
+    return bool(bom_lines) or (product.print_time_hours or 0) > 0
 
 
 def list_products_costs(
@@ -290,6 +304,9 @@ def list_products_costs(
     for product in products:
         if product.manual_price is not None:
             result[product.id] = _manual_price_breakdown(product.manual_price)
+            continue
+
+        if not has_recipe(product, boms.get(product.id, [])):
             continue
 
         material_cost = 0.0

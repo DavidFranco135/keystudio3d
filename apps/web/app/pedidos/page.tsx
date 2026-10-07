@@ -576,7 +576,10 @@ export default function PedidosPage() {
       setEditItemUnitCost(cost.production_cost.toFixed(2));
       setEditItemUnitPrice(cost.suggested_price.toFixed(2));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao calcular custo do produto.");
+      // 422 = produto sem preço definido: o preço fica em branco para digitar.
+      if (!(err instanceof ApiError && err.status === 422)) {
+        setError(err instanceof ApiError ? err.message : "Falha ao calcular custo do produto.");
+      }
     } finally {
       setIsPricingItemEdit(false);
     }
@@ -665,7 +668,10 @@ export default function PedidosPage() {
       setItemUnitCost(cost.production_cost.toFixed(2));
       setItemUnitPrice(cost.suggested_price.toFixed(2));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao calcular custo do produto.");
+      // 422 = produto sem preço definido: o preço fica em branco para digitar.
+      if (!(err instanceof ApiError && err.status === 422)) {
+        setError(err instanceof ApiError ? err.message : "Falha ao calcular custo do produto.");
+      }
     } finally {
       setIsPricingItem(false);
     }

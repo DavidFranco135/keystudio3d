@@ -850,6 +850,14 @@ export default function ProdutosPage() {
               <p className="text-xs text-neutral-500">
                 Só nome e preço — sem máquina, material ou perfil de custo.
               </p>
+            ) : !bomLines.some((l) => l.material_id && Number(l.quantity_g) > 0) &&
+              !(Number(printTimeHours) > 0) ? (
+              <p className="text-xs text-yellow-400">
+                Sem materiais nem tempo de impressão, o produto fica <strong>sem preço</strong>.{" "}
+                <button type="button" onClick={() => switchToManualPrice()} className="text-blue-400 hover:underline">
+                  Digitar o preço (Simples)
+                </button>
+              </p>
             ) : (
               editingId &&
               costs[editingId] && (
@@ -1164,8 +1172,10 @@ export default function ProdutosPage() {
                       <span className="font-medium text-green-400">Venda (calculada): {formatCurrency(cost.suggested_price)}</span>
                     </div>
                   ) : (
-                    <p className="border-t border-neutral-800 pt-2 text-xs text-neutral-600">
-                      Cadastre um perfil de custo para ver o preço sugerido.
+                    <p className="border-t border-neutral-800 pt-2 text-xs text-neutral-500">
+                      {costProfiles.length === 0
+                        ? "Cadastre um perfil de custo para ver o preço sugerido."
+                        : "Sem preço definido — use “Definir preço” (na loja aparece como “Preço a consultar”)."}
                     </p>
                   )}
 

@@ -99,6 +99,11 @@ class InvalidCostInputsError(DomainError):
     pass
 
 
+class ProductWithoutPriceError(DomainError):
+    """Produto sem preço de venda e sem receita (materiais/tempo de impressão)
+    para calcular um — não se inventa um preço só com os custos fixos."""
+
+
 class CannotDeleteDefaultCostProfileError(DomainError):
     pass
 

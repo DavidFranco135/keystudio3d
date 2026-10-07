@@ -59,13 +59,16 @@ def create_order(
 )
 def list_orders(organization_id: UUID, db: Session = Depends(get_db)) -> list[OrderResponse]:
     orders = order_use_cases.list_orders(db, organization_id=organization_id)
-    item_repo = OrderItemRepository(db)
+    # Itens de todos os pedidos numa leitura só (uma por pedido deixava a tela lenta).
+    items_by_order = OrderItemRepository(db).list_for_orders(
+        organization_id, [order.id for order in orders]
+    )
     responses = []
     for order in orders:
         response = OrderResponse.model_validate(order)
         response.items = [
             OrderItemBrief(product_id=i.product_id, quantity=i.quantity, unit_price=i.unit_price)
-            for i in item_repo.list_for_order(organization_id, order.id)
+            for i in items_by_order.get(order.id, [])
         ]
         responses.append(response)
     return responses

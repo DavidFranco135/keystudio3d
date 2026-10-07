@@ -53,3 +53,32 @@ def test_fields_left_out_of_the_body_are_kept(client: TestClient):
     assert response.status_code == 200, response.text
     assert response.json()["manual_price"] == 5
     assert response.json()["stock_quantity"] == 3
+
+
+def test_product_list_returns_each_products_own_materials(client: TestClient):
+    url, headers = _setup(client)
+    org_url = url.rsplit("/products", 1)[0]
+    pla = client.post(
+        f"{org_url}/materials", json={"name": "PLA", "type": "filament", "cost_per_kg": 100}, headers=headers
+    ).json()
+    petg = client.post(
+        f"{org_url}/materials", json={"name": "PETG", "type": "filament", "cost_per_kg": 120}, headers=headers
+    ).json()
+    client.post(url, json={"name": "Vaso", "materials": [{"material_id": pla["id"], "quantity_g": 50}]}, headers=headers)
+    client.post(
+        url,
+        json={
+            "name": "Luminaria",
+            "materials": [
+                {"material_id": pla["id"], "quantity_g": 10},
+                {"material_id": petg["id"], "quantity_g": 30},
+            ],
+        },
+        headers=headers,
+    )
+    client.post(url, json={"name": "Chaveiro", "manual_price": 5, "materials": []}, headers=headers)
+
+    listed = {p["name"]: p["materials"] for p in client.get(url, headers=headers).json()}
+    assert listed["Vaso"] == [{"material_id": pla["id"], "quantity_g": 50.0}]
+    assert sorted(m["quantity_g"] for m in listed["Luminaria"]) == [10.0, 30.0]
+    assert listed["Chaveiro"] == []

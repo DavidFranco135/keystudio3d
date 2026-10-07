@@ -19,10 +19,11 @@ from src.interfaces.http.v1.schemas import (
 router = APIRouter(prefix="/organizations/{organization_id}/products", tags=["products"])
 
 
-def _to_response(db: Session, product) -> ProductResponse:
-    materials = product_use_cases.list_product_materials(
-        db, organization_id=product.organization_id, product_id=product.id
-    )
+def _to_response(db: Session, product, materials: list[dict] | None = None) -> ProductResponse:
+    if materials is None:
+        materials = product_use_cases.list_product_materials(
+            db, organization_id=product.organization_id, product_id=product.id
+        )
     return ProductResponse(
         id=product.id,
         name=product.name,
@@ -75,7 +76,12 @@ def create_product(
 )
 def list_products(organization_id: UUID, db: Session = Depends(get_db)) -> list[ProductResponse]:
     products = product_use_cases.list_products(db, organization_id=organization_id)
-    return [_to_response(db, p) for p in products]
+    # Receitas de todos os produtos numa leitura só (uma por produto deixava
+    # todas as telas que listam produtos levando segundos).
+    materials = product_use_cases.list_products_materials(
+        db, organization_id=organization_id, product_ids=[p.id for p in products]
+    )
+    return [_to_response(db, p, materials.get(p.id, [])) for p in products]
 
 
 @router.get(

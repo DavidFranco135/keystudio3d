@@ -951,6 +951,24 @@ class OrderItemRepository:
             )
         )
 
+    def list_for_orders(
+        self, organization_id: UUID, order_ids: list[UUID]
+    ) -> dict[UUID, list[OrderItem]]:
+        """Items of many orders in one query (instead of one per order)."""
+        result: dict[UUID, list[OrderItem]] = {oid: [] for oid in order_ids}
+        if not order_ids:
+            return result
+        for item in self.session.scalars(
+            select(OrderItem)
+            .where(
+                OrderItem.order_id.in_(order_ids),
+                OrderItem.organization_id == organization_id,
+            )
+            .order_by(OrderItem.created_at)
+        ):
+            result.setdefault(item.order_id, []).append(item)
+        return result
+
     def create(
         self,
         *,

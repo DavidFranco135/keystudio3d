@@ -926,6 +926,26 @@ class OrderItemRepository:
         snaps = self._collection(organization_id, order_id).order_by("created_at").stream()
         return [self.session.hydrate(OrderItem, s.id, s.to_dict(), s.reference) for s in snaps]
 
+    def list_for_orders(
+        self, organization_id: UUID, order_ids: list[UUID]
+    ) -> dict[UUID, list[OrderItem]]:
+        """Items of many orders. Each order's items are a separate
+        subcollection, so the reads run concurrently (network only — the
+        session bookkeeping in `hydrate` stays on this thread).
+        """
+        if not order_ids:
+            return {}
+
+        def fetch(oid: UUID):
+            return oid, list(self._collection(organization_id, oid).order_by("created_at").stream())
+
+        with ThreadPoolExecutor(max_workers=min(16, len(order_ids))) as pool:
+            fetched = list(pool.map(fetch, order_ids))
+        return {
+            oid: [self.session.hydrate(OrderItem, s.id, s.to_dict(), s.reference) for s in snaps]
+            for oid, snaps in fetched
+        }
+
     def create(
         self,
         *,

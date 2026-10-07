@@ -83,6 +83,17 @@ def get_product(db: Session, *, organization_id: UUID, product_id: UUID) -> Prod
     return product
 
 
+def list_products_materials(
+    db: Session, *, organization_id: UUID, product_ids: list[UUID]
+) -> dict[UUID, list[dict]]:
+    """BOM lines of many products at once (one query, not one per product)."""
+    lines_by_product = ProductMaterialRepository(db).list_for_products(organization_id, product_ids)
+    return {
+        pid: [{"material_id": line.material_id, "quantity_g": line.quantity_g} for line in lines]
+        for pid, lines in lines_by_product.items()
+    }
+
+
 def list_product_materials(
     db: Session, *, organization_id: UUID, product_id: UUID
 ) -> list[dict]:

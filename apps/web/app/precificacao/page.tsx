@@ -9,6 +9,7 @@ import { calculatePricing } from "@/lib/pricing";
 import type { CostProfile, Machine, Material, Quote } from "@/lib/types";
 import type { PricingBreakdown } from "@/lib/pricing";
 import { AppShell } from "@/components/AppShell";
+import { normalizeSearch } from "@/lib/search";
 
 function CostBreakdownList({ breakdown }: { breakdown: PricingBreakdown }) {
   return (
@@ -371,7 +372,8 @@ export default function PrecificacaoPage() {
     };
     try {
       if (editingQuoteId) {
-        await apiFetch(`${orgPath}/quotes/${editingQuoteId}`, {
+        const previousName = quotes.find((q) => q.id === editingQuoteId)?.piece_name ?? pieceName;
+        const updated = await apiFetch<Quote>(`${orgPath}/quotes/${editingQuoteId}`, {
           method: "PATCH",
           accessToken,
           body: JSON.stringify({
@@ -379,12 +381,22 @@ export default function PrecificacaoPage() {
             final_price: editFinalPrice ? Number(editFinalPrice) : null,
           }),
         });
-        setMessage("Peça atualizada.");
+        // O produto criado a partir desta peça acompanha o novo preço.
+        const synced = await syncProductPrice(previousName, updated.final_price ?? updated.suggested_price);
+        setMessage(
+          synced > 0
+            ? `Peça atualizada — preço atualizado também em ${synced} produto(s).`
+            : "Peça atualizada."
+        );
         resetPecaForm();
         await load();
         setActiveTab("salvas");
       } else {
-        await apiFetch(`${orgPath}/quotes`, { method: "POST", accessToken, body: JSON.stringify(body) });
+        const saved = await apiFetch<Quote>(`${orgPath}/quotes`, {
+          method: "POST",
+          accessToken,
+          body: JSON.stringify(body),
+        });
 
         let productMessage = "Peça salva na lista.";
         try {
@@ -392,10 +404,14 @@ export default function PrecificacaoPage() {
             method: "POST",
             accessToken,
             body: JSON.stringify({
-              name: pieceName,
+              name: pieceName.trim(),
               description: null,
               print_time_hours: printTimeHoursNum || null,
               machine_id: printerId || null,
+              // O preço do produto é o calculado aqui (energia, extras, mão de
+              // obra, depreciação e margem da peça). Sem isso o produto era
+              // recalculado só com a receita e saía bem mais barato.
+              manual_price: Number((saved.final_price ?? saved.suggested_price).toFixed(2)),
               materials: materialId ? [{ material_id: materialId, quantity_g: weightGNum }] : [],
             }),
           });
@@ -444,6 +460,31 @@ export default function PrecificacaoPage() {
     resetPecaForm();
   }
 
+  // Atualiza o preço dos produtos com o mesmo nome da peça (sem diferenciar
+  // maiúsculas, acentos e espaços). Devolve quantos foram atualizados.
+  async function syncProductPrice(name: string, price: number): Promise<number> {
+    if (!accessToken || !name.trim()) return 0;
+    try {
+      const products = await apiFetch<{ id: string; name: string; manual_price: number | null }[]>(
+        `${orgPath}/products`,
+        { accessToken }
+      );
+      const target = normalizeSearch(name);
+      const matching = products.filter((p) => normalizeSearch(p.name) === target);
+      for (const product of matching) {
+        if (product.manual_price != null && Math.abs(product.manual_price - price) < 0.005) continue;
+        await apiFetch(`${orgPath}/products/${product.id}`, {
+          method: "PATCH",
+          accessToken,
+          body: JSON.stringify({ manual_price: Number(price.toFixed(2)) }),
+        });
+      }
+      return matching.length;
+    } catch {
+      return 0;
+    }
+  }
+
   async function handleAddPieceToProducts(q: Quote) {
     if (!accessToken || !q.piece_name) return;
     setError(null);
@@ -452,11 +493,11 @@ export default function PrecificacaoPage() {
         method: "POST",
         accessToken,
         body: JSON.stringify({
-          name: q.piece_name,
+          name: q.piece_name.trim(),
           description: null,
           print_time_hours: null,
           machine_id: null,
-          manual_price: q.final_price ?? q.suggested_price,
+          manual_price: Number((q.final_price ?? q.suggested_price).toFixed(2)),
           materials: [],
         }),
       });

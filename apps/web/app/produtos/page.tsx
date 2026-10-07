@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
-import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostItem } from "@/lib/types";
+import type { CostProfile, Machine, Material, Product, ProductCost, ProductCostItem, Quote } from "@/lib/types";
 import type { StoreAdminResponse, StoreCategory, StoreSettings } from "@/lib/store";
 import { refreshPublicStoreCache } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { SearchInput } from "@/components/SearchInput";
-import { matchesSearch } from "@/lib/search";
+import { matchesSearch, normalizeSearch } from "@/lib/search";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import { focusStyle } from "@/lib/focus";
 
@@ -55,6 +55,9 @@ export default function ProdutosPage() {
   const { status, accessToken, currentOrganizationId } = useAuth();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [showAudit, setShowAudit] = useState(false);
+  const [isFixingPrices, setIsFixingPrices] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [costProfiles, setCostProfiles] = useState<CostProfile[]>([]);
@@ -184,14 +187,16 @@ export default function ProdutosPage() {
     if (!accessToken || !currentOrganizationId) return;
     setIsLoading(true);
     try {
-      const [productsData, materialsData, machinesData, profilesData, store] = await Promise.all([
+      const [productsData, materialsData, machinesData, profilesData, store, quotesData] = await Promise.all([
         apiFetch<Product[]>(`${orgPath}/products`, { accessToken }),
         apiFetch<Material[]>(`${orgPath}/materials`, { accessToken }),
         apiFetch<Machine[]>(`${orgPath}/machines`, { accessToken }),
         apiFetch<CostProfile[]>(`${orgPath}/cost-profiles`, { accessToken }),
         apiFetch<StoreAdminResponse>(`${orgPath}/store`, { accessToken }).catch(() => null),
+        apiFetch<Quote[]>(`${orgPath}/quotes`, { accessToken }).catch(() => [] as Quote[]),
       ]);
       setProducts(productsData);
+      setQuotes(quotesData);
       setStoreSettings(store ? { ...store.settings, categories: store.settings.categories ?? [] } : null);
       setStoreSlug(store?.slug);
       setMaterials(materialsData);
@@ -301,6 +306,52 @@ export default function ProdutosPage() {
     });
   }
 
+  // --- Conferência de preços --------------------------------------------------
+  // Peças salvas na Precificação, pelo nome (a mais recente vale).
+  const pieceByName = new Map<string, Quote>();
+  for (const q of [...quotes].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    if (q.piece_name?.trim()) pieceByName.set(normalizeSearch(q.piece_name), q);
+  }
+  const effectivePrice = (p: Product): number | null => p.manual_price ?? costs[p.id]?.suggested_price ?? null;
+  const priceMismatches = products
+    .map((p) => {
+      const piece = pieceByName.get(normalizeSearch(p.name));
+      if (!piece) return null;
+      const piecePrice = Number((piece.final_price ?? piece.suggested_price).toFixed(2));
+      const current = effectivePrice(p);
+      if (current != null && Math.abs(current - piecePrice) < 0.01) return null;
+      return { product: p, current, piecePrice, calculated: p.manual_price == null };
+    })
+    .filter((m): m is { product: Product; current: number | null; piecePrice: number; calculated: boolean } => m !== null);
+  const duplicateGroups = Object.values(
+    products.reduce<Record<string, Product[]>>((groups, p) => {
+      const key = normalizeSearch(p.name);
+      (groups[key] ??= []).push(p);
+      return groups;
+    }, {})
+  ).filter((group) => group.length > 1);
+
+  async function applyPiecePrices(items: { product: Product; piecePrice: number }[]) {
+    if (!accessToken || items.length === 0) return;
+    setIsFixingPrices(true);
+    setError(null);
+    try {
+      for (const { product, piecePrice } of items) {
+        await apiFetch(`${orgPath}/products/${product.id}`, {
+          method: "PATCH",
+          accessToken,
+          body: JSON.stringify({ manual_price: piecePrice }),
+        });
+      }
+      refreshPublicStoreCache(storeSlug);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao corrigir preços.");
+    } finally {
+      setIsFixingPrices(false);
+    }
+  }
+
   const visibleProducts = products.filter(
     (product) =>
       matchesSearch(search, product.name, product.description) &&
@@ -404,8 +455,8 @@ export default function ProdutosPage() {
     setError(null);
     try {
       const body = JSON.stringify({
-        name,
-        description: description || null,
+        name: name.trim(),
+        description: description.trim() || null,
         print_time_hours: mode === "simples" ? null : printTimeHours ? Number(printTimeHours) : null,
         machine_id: mode === "simples" ? null : machineId || null,
         manual_price: mode === "simples" ? Number(manualPrice) : null,
@@ -488,6 +539,102 @@ export default function ProdutosPage() {
           <p className="rounded-lg border border-yellow-800 bg-yellow-950/40 px-4 py-3 text-sm text-yellow-300">
             Cadastre um perfil de custo na aba Precificação (Perfil de custo) para ver o custo/preço calculado aqui.
           </p>
+        )}
+
+        {!isLoading && (priceMismatches.length > 0 || duplicateGroups.length > 0) && (
+          <section className="space-y-3 rounded-xl border border-yellow-800/70 bg-yellow-950/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-medium text-yellow-200">Conferência de preços</h2>
+                <p className="text-xs text-yellow-300/80">
+                  {priceMismatches.length > 0 && `${priceMismatches.length} produto(s) com preço diferente da Precificação`}
+                  {priceMismatches.length > 0 && duplicateGroups.length > 0 && " · "}
+                  {duplicateGroups.length > 0 && `${duplicateGroups.length} nome(s) repetido(s)`}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAudit((v) => !v)}
+                className="rounded-lg border border-yellow-800 px-3 py-1.5 text-sm text-yellow-200 hover:bg-yellow-950/60"
+              >
+                {showAudit ? "Fechar" : "Conferir"}
+              </button>
+            </div>
+
+            {showAudit && (
+              <div className="space-y-4 border-t border-yellow-900/60 pt-3">
+                {priceMismatches.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-neutral-400">
+                        O preço destes produtos não bate com a peça de mesmo nome salva na Precificação.
+                      </p>
+                      <button
+                        onClick={() => applyPiecePrices(priceMismatches)}
+                        disabled={isFixingPrices}
+                        className="rounded bg-yellow-600 px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-500 disabled:opacity-50"
+                      >
+                        {isFixingPrices ? "Corrigindo…" : `Usar o preço da Precificação em todos (${priceMismatches.length})`}
+                      </button>
+                    </div>
+                    <ul className="divide-y divide-neutral-800 rounded border border-neutral-800">
+                      {priceMismatches.map((m) => (
+                        <li key={m.product.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                          <span className="min-w-0 flex-1 truncate">{m.product.name}</span>
+                          <span className="text-xs text-neutral-400">
+                            Aqui: {m.current != null ? formatCurrency(m.current) : "sem preço"}
+                            {m.calculated ? " (calculado)" : ""} · Precificação:{" "}
+                            <span className="font-medium text-green-400">{formatCurrency(m.piecePrice)}</span>
+                          </span>
+                          <button
+                            onClick={() => applyPiecePrices([m])}
+                            disabled={isFixingPrices}
+                            className="text-xs text-yellow-300 hover:underline disabled:opacity-50"
+                          >
+                            Usar {formatCurrency(m.piecePrice)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {duplicateGroups.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-neutral-400">
+                      Produtos com o mesmo nome — no pedido é fácil escolher o errado. Confira e exclua o que sobrar.
+                    </p>
+                    <ul className="space-y-2">
+                      {duplicateGroups.map((group) => (
+                        <li key={group[0].id} className="rounded border border-neutral-800 px-3 py-2 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">{group[0].name.trim()}</span>
+                            <button
+                              onClick={() => {
+                                setSearch(group[0].name.trim());
+                                setVisibilityFilter("all");
+                                setCategoryFilter(null);
+                              }}
+                              className="text-xs text-blue-400 hover:underline"
+                            >
+                              Ver na lista
+                            </button>
+                          </div>
+                          <p className="mt-1 text-xs text-neutral-400">
+                            {group
+                              .map((p) => {
+                                const price = effectivePrice(p);
+                                return `${price != null ? formatCurrency(price) : "sem preço"}${p.manual_price == null ? " (calculado)" : ""}`;
+                              })
+                              .join("  ·  ")}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         )}
 
         {storeSettings && (

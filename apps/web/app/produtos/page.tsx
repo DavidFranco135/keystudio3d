@@ -611,8 +611,8 @@ export default function ProdutosPage() {
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-xs text-neutral-400">
-                              Sem preço guardado — o sistema recalcula por uma conta simples (sem energia, extras,
-                              mão de obra e a margem da peça). Use o preço da Precificação:
+                              Sem preço guardado — o sistema recalcula pela receita (sem itens extras, mão de obra e
+                              com a margem do perfil). Use o preço da Precificação:
                             </p>
                             <button
                               onClick={() => applyPiecePrices(calculated)}
@@ -1283,7 +1283,7 @@ export default function ProdutosPage() {
                                   {product.print_time_hours
                                     ? `${product.print_time_hours} h de impressão${machine ? ` na ${machine.name} a ${formatCurrency(machine.cost_per_hour ?? 0)}/h (cadastro em Máquinas)` : " sem máquina"}`
                                     : "sem tempo de impressão"}
-                                  {" · "}sem energia, mão de obra nem itens extras
+                                  {" · "}energia pela potência da máquina{machine?.power_watts ? ` (${machine.power_watts} W)` : " (sem potência cadastrada = R$ 0)"} · sem mão de obra nem itens extras
                                   {profile ? ` · margem do perfil “${profile.name}”: ${profile.profit_margin_percentage}%` : ""}
                                 </li>
                                 {piece && (

@@ -147,7 +147,7 @@ def get_product_cost(
     organization_id: UUID,
     product_id: UUID,
     cost_profile_id: UUID,
-    energy_kwh: float = 0.0,
+    energy_kwh: float | None = None,  # sem valor: calcula pela potência da máquina
     labor_hours: float = 0.0,
     db: Session = Depends(get_db),
 ) -> ProductCostResponse:

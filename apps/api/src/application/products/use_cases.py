@@ -216,7 +216,7 @@ def compute_product_cost(
     organization_id: UUID,
     product_id: UUID,
     cost_profile_id: UUID,
-    energy_kwh: float = 0.0,
+    energy_kwh: float | None = None,
     labor_hours: float = 0.0,
 ) -> CostBreakdown:
     """Sums the product's BOM against each material's cost_per_kg to get
@@ -246,11 +246,12 @@ def compute_product_cost(
         cost_per_kg = material.cost_per_kg or 0.0
         material_cost += (line.quantity_g / 1000.0) * cost_per_kg
 
-    if product.machine_id is not None:
-        machine = get_machine(db, organization_id=organization_id, machine_id=product.machine_id)
-        machine_cost_per_hour = machine.cost_per_hour or 0.0
-    else:
-        machine_cost_per_hour = 0.0
+    machine = (
+        get_machine(db, organization_id=organization_id, machine_id=product.machine_id)
+        if product.machine_id is not None
+        else None
+    )
+    machine_cost_per_hour = (machine.cost_per_hour or 0.0) if machine else 0.0
 
     print_time_hours = product.print_time_hours or 0.0
 
@@ -259,11 +260,21 @@ def compute_product_cost(
             material_cost=material_cost,
             print_time_hours=print_time_hours,
             machine_cost_per_hour=machine_cost_per_hour,
-            energy_kwh=energy_kwh,
+            energy_kwh=energy_kwh if energy_kwh is not None else product_energy_kwh(machine, print_time_hours),
             labor_hours=labor_hours,
         ),
         _profile_values(profile),
     )
+
+
+def product_energy_kwh(machine, print_time_hours: float) -> float:
+    """Energia gasta na impressão, igual à Precificação: potência da máquina
+    (W) / 1000 × horas. Antes ficava sempre 0 aqui, e o preço calculado do
+    produto saía menor que o da Precificação para a mesma peça."""
+    power_watts = getattr(machine, "power_watts", None) if machine else None
+    if not power_watts or print_time_hours <= 0:
+        return 0.0
+    return (power_watts / 1000.0) * print_time_hours
 
 
 def has_recipe(product, bom_lines) -> bool:
@@ -317,13 +328,14 @@ def list_products_costs(
 
         machine = machines_by_id.get(product.machine_id) if product.machine_id else None
         machine_cost_per_hour = (machine.cost_per_hour or 0.0) if machine else 0.0
+        print_time_hours = product.print_time_hours or 0.0
 
         result[product.id] = calculate_quote(
             QuoteInputs(
                 material_cost=material_cost,
-                print_time_hours=product.print_time_hours or 0.0,
+                print_time_hours=print_time_hours,
                 machine_cost_per_hour=machine_cost_per_hour,
-                energy_kwh=0.0,
+                energy_kwh=product_energy_kwh(machine, print_time_hours),
                 labor_hours=0.0,
             ),
             profile_values,

@@ -118,3 +118,68 @@ def test_product_without_price_or_recipe_gets_no_invented_price(client: TestClie
     ids = {c["product_id"] for c in costs}
     assert empty["id"] not in ids
     assert timed["id"] in ids
+
+
+def test_calculated_product_price_includes_energy_like_the_pricing_screen(client: TestClient):
+    # Mesmos números do "SNOOP E CASA": 59,51 g a R$ 100/kg, 4,12 h, depreciação
+    # R$ 1/h, desperdício 10%, embalagem R$ 2,50, margem 100%. A energia vem da
+    # potência da impressora, como na Precificação.
+    url, headers = _setup(client)
+    org_url = url.rsplit("/products", 1)[0]
+    profile = client.post(
+        f"{org_url}/cost-profiles",
+        json={
+            "name": "Padrão",
+            "energy_cost_per_kwh": 0.8,
+            "labor_cost_per_hour": 0.0,
+            "packaging_cost_flat": 2.5,
+            "waste_percentage": 10.0,
+            "fees_percentage": 0.0,
+            "profit_margin_percentage": 100.0,
+            "is_default": True,
+        },
+        headers=headers,
+    ).json()
+    machine = client.post(
+        f"{org_url}/machines",
+        json={"name": "Bambu Lab A1", "technology": "FDM", "power_watts": 400, "cost_per_hour": 1.0},
+        headers=headers,
+    )
+    assert machine.status_code == 201, machine.text
+    machine = machine.json()
+    material = client.post(
+        f"{org_url}/materials", json={"name": "PLA", "type": "filament", "cost_per_kg": 100}, headers=headers
+    ).json()
+    product = client.post(
+        url,
+        json={
+            "name": "SNOOP E CASA",
+            "print_time_hours": 4.12,
+            "machine_id": machine["id"],
+            "materials": [{"material_id": material["id"], "quantity_g": 59.51}],
+        },
+        headers=headers,
+    ).json()
+    quote = client.post(
+        f"{org_url}/quotes",
+        json={
+            "cost_profile_id": profile["id"],
+            "piece_name": "SNOOP E CASA",
+            "material_cost": 59.51 / 1000 * 100,
+            "print_time_hours": 4.12,
+            "machine_cost_per_hour": 1.0,
+            "energy_kwh": 400 / 1000 * 4.12,
+            "labor_hours": 0,
+            "profit_margin_percentage": 100,
+        },
+        headers=headers,
+    ).json()
+
+    single = client.get(f"{url}/{product['id']}/cost?cost_profile_id={profile['id']}", headers=headers).json()
+    listed = {
+        c["product_id"]: c
+        for c in client.get(f"{url}/costs?cost_profile_id={profile['id']}", headers=headers).json()
+    }[product["id"]]
+    assert single["energy_cost"] > 0
+    assert round(single["suggested_price"], 2) == round(quote["suggested_price"], 2)
+    assert round(listed["suggested_price"], 2) == round(quote["suggested_price"], 2)

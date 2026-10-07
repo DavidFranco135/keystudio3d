@@ -21,32 +21,7 @@ import { focusStyle } from "@/lib/focus";
 import { AppShell } from "@/components/AppShell";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { ProductPicker } from "@/components/ProductPicker";
-
-const STATUS_LABELS: Record<string, string> = {
-  quote: "Orçamento",
-  order: "Pedido",
-  paid: "Pago",
-  production: "Produção",
-  printing: "Imprimindo",
-  finishing: "Acabamento",
-  packaging: "Embalagem",
-  delivered: "Entregue",
-  completed: "Concluído",
-  cancelled: "Cancelado",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  quote: "bg-neutral-800 text-neutral-300",
-  order: "bg-blue-950 text-blue-300",
-  paid: "bg-cyan-950 text-cyan-300",
-  production: "bg-purple-950 text-purple-300",
-  printing: "bg-purple-950 text-purple-300",
-  finishing: "bg-indigo-950 text-indigo-300",
-  packaging: "bg-indigo-950 text-indigo-300",
-  delivered: "bg-green-950 text-green-300",
-  completed: "bg-green-950 text-green-300",
-  cancelled: "bg-red-950 text-red-300",
-};
+import { STATUS_LABELS, STATUS_TONE } from "@/lib/order-status";
 
 function nextStatus(current: string): string | null {
   const idx = ORDER_STATUSES.indexOf(current as (typeof ORDER_STATUSES)[number]);
@@ -369,6 +344,23 @@ export default function PedidosPage() {
     if (busy) writeDraft(draftKey, d);
     else clearDraft(draftKey);
   }, [draftJson, draftKey, currentOrganizationId]);
+
+  // Link vindo de outra tela (ex.: Clientes): /pedidos?pedido=<id> abre e
+  // mostra esse pedido.
+  useEffect(() => {
+    if (isLoading || orders.length === 0) return;
+    const wanted = new URLSearchParams(window.location.search).get("pedido");
+    if (!wanted || !orders.some((o) => o.id === wanted)) return;
+    const id = setTimeout(() => {
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+      setFilter("all");
+      setExpandedOrderId(wanted);
+      setTimeout(() => {
+        window.document.getElementById(`pedido-${wanted}`)?.scrollIntoView({ block: "start" });
+      }, 150);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [isLoading, orders]);
 
   // Pedido que estava aberto (restaurado do rascunho): carrega seus itens.
   useEffect(() => {
@@ -828,7 +820,7 @@ export default function PedidosPage() {
               const prod = effectiveProduction(order);
               const dueText = dueLabel(order);
               return (
-                <div key={order.id} className="space-y-3 p-4">
+                <div key={order.id} id={`pedido-${order.id}`} className="scroll-mt-24 space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{customerName(order.customer_id)}</p>

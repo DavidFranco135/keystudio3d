@@ -1,21 +1,961 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { apiFetch, ApiError, uploadImage } from "@/lib/api-client";
+import { formatCurrency } from "@/lib/format";
+import type { Product } from "@/lib/types";
+import type { StoreAdminResponse, StoreSettings } from "@/lib/store";
+import {
+  ACCENTS,
+  THEME_OPTIONS,
+  DEFAULT_WHATSAPP,
+  formatWhatsappDisplay,
+  normalizeWhatsapp,
+  refreshPublicStoreCache,
+} from "@/lib/store";
+import { AppShell } from "@/components/AppShell";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesSearch } from "@/lib/search";
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
-export default function HomePage() {
-  const { status } = useAuth();
+const EMPTY: StoreSettings = {
+  display_name: "",
+  logo_url: "",
+  tagline: "",
+  about: "",
+  whatsapp: DEFAULT_WHATSAPP,
+  instagram: "",
+  hours: "",
+  address: "",
+  accent: "indigo",
+  theme: "light",
+  slides: [],
+  highlights: [],
+  hidden_product_ids: [],
+  featured_product_ids: [],
+  product_order: [],
+  price_on_request_product_ids: [],
+  categories: [],
+};
+
+function newCategoryId(): string {
+  return `cat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+const input =
+  "w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm placeholder:text-neutral-600";
+
+function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 sm:p-5">
+      <div>
+        <h2 className="font-medium">{title}</h2>
+        {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export default function LojaAdminPage() {
+  const { status, accessToken, currentOrganizationId } = useAuth();
   const router = useRouter();
+  const [slug, setSlug] = useState("");
+  const [settings, setSettings] = useState<StoreSettings>(EMPTY);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
+  // Categoria cujo seletor de foto principal está aberto.
+  const [coverPickerFor, setCoverPickerFor] = useState<string | null>(null);
+
+  const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
+  const draftKey = `loja-admin:${currentOrganizationId}`;
+  const [restoredDraft, setRestoredDraft] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!accessToken || !currentOrganizationId) return;
+    setIsLoading(true);
+    try {
+      const [store, productsData] = await Promise.all([
+        apiFetch<StoreAdminResponse>(`${orgPath}/store`, { accessToken }),
+        apiFetch<Product[]>(`${orgPath}/products`, { accessToken }),
+      ]);
+      setSlug(store.slug);
+      setProducts(productsData);
+      // Alterações não salvas de antes (ex.: o celular fechou o app em segundo
+      // plano) voltam por cima do que está salvo.
+      const draft = readDraft<StoreSettings>(draftKey);
+      if (draft) {
+        setSettings({ ...EMPTY, ...store.settings, ...draft });
+        setDirty(true);
+        setRestoredDraft(true);
+      } else {
+        setSettings({ ...EMPTY, ...store.settings });
+        setDirty(false);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao carregar a loja.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accessToken, currentOrganizationId, orgPath, draftKey]);
+
+  // Guarda no aparelho o que ainda não foi salvo.
+  useEffect(() => {
+    if (dirty && currentOrganizationId) writeDraft(draftKey, settings);
+  }, [dirty, settings, draftKey, currentOrganizationId]);
+
+  function discardDraft() {
+    clearDraft(draftKey);
+    setRestoredDraft(false);
+    setMessage(null);
+    load();
+  }
 
   useEffect(() => {
-    if (status === "authenticated") router.replace("/dashboard");
-    if (status === "unauthenticated") router.replace("/login");
-  }, [status, router]);
+    if (status === "unauthenticated") {
+      router.replace("/login");
+      return;
+    }
+    if (status !== "authenticated") return;
+    const timeoutId = setTimeout(load, 0);
+    return () => clearTimeout(timeoutId);
+  }, [status, router, load]);
+
+  const publicUrl = useMemo(
+    () => (slug && typeof window !== "undefined" ? `${window.location.origin}/loja?s=${slug}` : ""),
+    [slug]
+  );
+
+  function update(patch: Partial<StoreSettings>) {
+    setSettings((s) => ({ ...s, ...patch }));
+    setDirty(true);
+    setMessage(null);
+  }
+
+  async function handleSlideUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0 || !accessToken) return;
+    const room = 10 - settings.slides.length;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const added: StoreSettings["slides"] = [];
+      for (const file of files.slice(0, room)) {
+        const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+        added.push({ url, title: "", subtitle: "" });
+      }
+      update({ slides: [...settings.slides, ...added] });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar imagem.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function handleLogoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      update({ logo_url: url });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar a logo.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  function moveSlide(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= settings.slides.length) return;
+    const next = [...settings.slides];
+    [next[index], next[target]] = [next[target], next[index]];
+    update({ slides: next });
+  }
+
+  function toggleId(
+    list: "hidden_product_ids" | "featured_product_ids" | "price_on_request_product_ids",
+    id: string
+  ) {
+    const current = settings[list];
+    update({ [list]: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
+  }
+
+  function addCategory() {
+    update({
+      categories: [...settings.categories, { id: newCategoryId(), name: "", product_ids: [], cover_url: "" }],
+    });
+  }
+
+  function setCategoryCover(id: string, url: string) {
+    update({ categories: settings.categories.map((c) => (c.id === id ? { ...c, cover_url: url } : c)) });
+  }
+
+  async function handleCategoryCoverUpload(categoryId: string, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      setCategoryCover(categoryId, url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar a foto da categoria.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  function renameCategory(id: string, name: string) {
+    update({ categories: settings.categories.map((c) => (c.id === id ? { ...c, name } : c)) });
+  }
+
+  function moveCategory(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= settings.categories.length) return;
+    const next = [...settings.categories];
+    [next[index], next[target]] = [next[target], next[index]];
+    update({ categories: next });
+  }
+
+  function removeCategory(id: string) {
+    const category = settings.categories.find((c) => c.id === id);
+    if (category?.name.trim() && !window.confirm(`Apagar a categoria "${category.name}"? Os produtos não são apagados.`)) return;
+    update({ categories: settings.categories.filter((c) => c.id !== id) });
+  }
+
+  function toggleCategory(categoryId: string, productId: string) {
+    update({
+      categories: settings.categories.map((c) =>
+        c.id !== categoryId
+          ? c
+          : {
+              ...c,
+              product_ids: c.product_ids.includes(productId)
+                ? c.product_ids.filter((x) => x !== productId)
+                : [...c.product_ids, productId],
+            }
+      ),
+    });
+  }
+
+  // Produtos na ordem escolhida (os que ainda não têm posição vão para o fim,
+  // na ordem de cadastro — igual ao que a loja pública faz).
+  const orderedProducts = useMemo(() => {
+    const rank = new Map(settings.product_order.map((id, i) => [id, i]));
+    const fallback = settings.product_order.length;
+    return products
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => (rank.get(a.p.id) ?? fallback) - (rank.get(b.p.id) ?? fallback) || a.i - b.i)
+      .map(({ p }) => p);
+  }, [products, settings.product_order]);
+
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const listedProducts = orderedProducts.filter((p) => {
+    const hidden = settings.hidden_product_ids.includes(p.id);
+    return (
+      matchesSearch(productSearch, p.name, p.description) &&
+      (visibilityFilter === "all" || (visibilityFilter === "hidden") === hidden)
+    );
+  });
+
+  // Move um produto na lista (trocando de lugar com o vizinho da lista que está
+  // sendo exibida — assim funciona também com busca/filtro ativos) ou para o topo.
+  function moveProduct(id: string, action: "up" | "down" | "top") {
+    const full = orderedProducts.map((p) => p.id);
+    const from = full.indexOf(id);
+    if (from < 0) return;
+    if (action === "top") {
+      if (from === 0) return;
+      update({ product_order: [id, ...full.filter((x) => x !== id)] });
+      return;
+    }
+    const shown = listedProducts.map((p) => p.id);
+    const at = shown.indexOf(id);
+    const neighbor = shown[at + (action === "up" ? -1 : 1)];
+    if (neighbor === undefined) return;
+    const to = full.indexOf(neighbor);
+    const next = [...full];
+    [next[from], next[to]] = [next[to], next[from]];
+    update({ product_order: next });
+  }
+
+  // Destaques visíveis, na ordem escolhida.
+  const featuredList = useMemo(
+    () =>
+      Array.from(new Set(settings.featured_product_ids))
+        .map((id) => productsById.get(id))
+        .filter((p): p is Product => !!p && !settings.hidden_product_ids.includes(p.id)),
+    [settings.featured_product_ids, settings.hidden_product_ids, productsById]
+  );
+
+  function moveFeatured(id: string, action: "up" | "down" | "top") {
+    const ids = featuredList.map((p) => p.id);
+    const from = ids.indexOf(id);
+    if (from < 0) return;
+    const next = [...ids];
+    if (action === "top") {
+      if (from === 0) return;
+      next.splice(from, 1);
+      next.unshift(id);
+    } else {
+      const to = from + (action === "up" ? -1 : 1);
+      if (to < 0 || to >= next.length) return;
+      [next[from], next[to]] = [next[to], next[from]];
+    }
+    // Mantém no fim os destaques de produtos ocultos/removidos (não aparecem aqui).
+    const rest = settings.featured_product_ids.filter((x) => !next.includes(x));
+    update({ featured_product_ids: [...next, ...rest] });
+  }
+
+  // Mostra/oculta de uma vez todos os produtos que estão na lista filtrada.
+  function setVisibilityForListed(visible: boolean) {
+    const ids = new Set(listedProducts.map((p) => p.id));
+    const others = settings.hidden_product_ids.filter((id) => !ids.has(id));
+    update({ hidden_product_ids: visible ? others : [...others, ...ids] });
+  }
+
+  async function handleSave() {
+    if (!accessToken) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const body = {
+        ...settings,
+        whatsapp: normalizeWhatsapp(settings.whatsapp) || DEFAULT_WHATSAPP,
+        highlights: settings.highlights.filter((h) => h.title.trim() || h.text.trim()),
+        // Só grava a ordem se o lojista reordenou; assim ids apagados saem da lista.
+        product_order: settings.product_order.length > 0 ? orderedProducts.map((p) => p.id) : [],
+        categories: settings.categories
+          .filter((c) => c.name.trim())
+          .map((c) => ({ ...c, name: c.name.trim() })),
+      };
+      const saved = await apiFetch<StoreAdminResponse>(`${orgPath}/store`, {
+        method: "PUT",
+        accessToken,
+        body: JSON.stringify(body),
+      });
+      setSettings({ ...EMPTY, ...saved.settings });
+      setDirty(false);
+      clearDraft(draftKey);
+      setRestoredDraft(false);
+      refreshPublicStoreCache(saved.slug);
+      setMessage("Alterações salvas. A loja pública atualiza em alguns segundos.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao salvar.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt("Copie o link:", publicUrl);
+    }
+  }
+
+  if (status !== "authenticated") {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="text-neutral-400">Carregando…</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-neutral-400">Carregando…</p>
-    </main>
+    <AppShell title="Minha Loja">
+      <div className="mx-auto max-w-4xl space-y-5 pb-28">
+        {error && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
+        {message && <p className="rounded bg-green-950 p-2 text-sm text-green-300">{message}</p>}
+
+        {isLoading ? (
+          <p className="text-neutral-500">Carregando…</p>
+        ) : (
+          <>
+            <Card title="Link da loja pública" hint="Compartilhe com seus clientes. Não precisa de login.">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input readOnly value={publicUrl} className={`${input} sm:flex-1`} />
+                <div className="flex gap-2">
+                  <button
+                    onClick={copyLink}
+                    className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
+                  >
+                    {copied ? "Copiado!" : "Copiar link"}
+                  </button>
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500"
+                  >
+                    Abrir loja
+                  </a>
+                </div>
+              </div>
+              {dirty && (
+                <p className="text-xs text-yellow-400">Você tem alterações não salvas — salve para publicá-las.</p>
+              )}
+            </Card>
+
+            <Card title="Logo da loja" hint="Aparece no topo da loja pública, ao lado do nome. Use uma imagem quadrada.">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 text-xs text-neutral-600">
+                  {settings.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={settings.logo_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    "Sem logo"
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="cursor-pointer rounded border border-dashed border-neutral-600 px-4 py-2 text-sm text-neutral-300 hover:border-blue-500">
+                    {isUploading ? "Enviando…" : settings.logo_url ? "Trocar logo" : "+ Enviar logo"}
+                    <input type="file" accept="image/*" disabled={isUploading} onChange={handleLogoUpload} className="hidden" />
+                  </label>
+                  {settings.logo_url && (
+                    <button
+                      onClick={() => update({ logo_url: "" })}
+                      className="rounded border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            <Card title="Capa com slides" hint="Fotos que passam automaticamente no topo da loja (até 10). Sem slides, usamos as fotos dos seus produtos.">
+              <label className="inline-block cursor-pointer rounded border border-dashed border-neutral-600 px-4 py-3 text-sm text-neutral-300 hover:border-blue-500">
+                {isUploading ? "Enviando…" : "+ Adicionar fotos da capa"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={isUploading || settings.slides.length >= 10}
+                  onChange={handleSlideUpload}
+                  className="hidden"
+                />
+              </label>
+              {settings.slides.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum slide ainda.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {settings.slides.map((slide, i) => (
+                    <li key={`${slide.url}-${i}`} className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3 sm:flex-row">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={slide.url} alt="" className="h-24 w-full rounded object-cover sm:w-40" />
+                      <div className="flex-1 space-y-2">
+                        <input
+                          className={input}
+                          placeholder="Título (opcional)"
+                          value={slide.title}
+                          maxLength={120}
+                          onChange={(e) =>
+                            update({
+                              slides: settings.slides.map((s, j) => (j === i ? { ...s, title: e.target.value } : s)),
+                            })
+                          }
+                        />
+                        <input
+                          className={input}
+                          placeholder="Subtítulo (opcional)"
+                          value={slide.subtitle}
+                          maxLength={240}
+                          onChange={(e) =>
+                            update({
+                              slides: settings.slides.map((s, j) =>
+                                j === i ? { ...s, subtitle: e.target.value } : s
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex gap-2 sm:flex-col">
+                        <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="rounded border border-neutral-700 px-3 py-1 text-xs disabled:opacity-30">
+                          ↑
+                        </button>
+                        <button onClick={() => moveSlide(i, 1)} disabled={i === settings.slides.length - 1} className="rounded border border-neutral-700 px-3 py-1 text-xs disabled:opacity-30">
+                          ↓
+                        </button>
+                        <button
+                          onClick={() => update({ slides: settings.slides.filter((_, j) => j !== i) })}
+                          className="rounded border border-red-900 px-3 py-1 text-xs text-red-400 hover:bg-red-950"
+                        >
+                          Apagar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card title="Informações da loja">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">Nome da loja</label>
+                  <input className={input} value={settings.display_name} placeholder="Ex.: Ateliê 3D" maxLength={120} onChange={(e) => update({ display_name: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">Frase de efeito</label>
+                  <input className={input} value={settings.tagline} placeholder="Ex.: Peças únicas impressas em 3D" maxLength={200} onChange={(e) => update({ tagline: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">WhatsApp (com DDD)</label>
+                  <input className={input} value={settings.whatsapp} placeholder="21 97038-6065" onChange={(e) => update({ whatsapp: e.target.value })} />
+                  <p className="text-[11px] text-neutral-600">Será exibido como {formatWhatsappDisplay(settings.whatsapp)}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">Instagram (opcional)</label>
+                  <input className={input} value={settings.instagram} placeholder="@sualoja" maxLength={120} onChange={(e) => update({ instagram: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">Horário de atendimento</label>
+                  <textarea className={input} rows={2} value={settings.hours} placeholder="Seg a Sex, 9h às 18h" maxLength={300} onChange={(e) => update({ hours: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-500">Endereço / região de entrega</label>
+                  <textarea className={input} rows={2} value={settings.address} placeholder="Rio de Janeiro - RJ" maxLength={300} onChange={(e) => update({ address: e.target.value })} />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs text-neutral-500">Sobre a loja</label>
+                  <textarea className={input} rows={4} value={settings.about} placeholder="Conte sua história, seus diferenciais…" maxLength={2000} onChange={(e) => update({ about: e.target.value })} />
+                </div>
+              </div>
+            </Card>
+
+            <Card title="Diferenciais" hint="Até 3 cards logo abaixo da capa (ex.: Entrega rápida, Personalizado).">
+              <div className="space-y-2">
+                {settings.highlights.map((h, i) => (
+                  <div key={i} className="flex flex-col gap-2 sm:flex-row">
+                    <input className={`${input} sm:w-56`} placeholder="Título" value={h.title} maxLength={80}
+                      onChange={(e) => update({ highlights: settings.highlights.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })} />
+                    <input className={`${input} sm:flex-1`} placeholder="Descrição" value={h.text} maxLength={240}
+                      onChange={(e) => update({ highlights: settings.highlights.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
+                    <button onClick={() => update({ highlights: settings.highlights.filter((_, j) => j !== i) })} className="rounded border border-red-900 px-3 py-2 text-xs text-red-400 hover:bg-red-950">
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {settings.highlights.length < 3 && (
+                  <button onClick={() => update({ highlights: [...settings.highlights, { title: "", text: "" }] })} className="text-sm text-blue-400 hover:underline">
+                    + Adicionar diferencial
+                  </button>
+                )}
+              </div>
+            </Card>
+
+            <Card title="Aparência">
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-500">Cor de destaque</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(ACCENTS).map(([key, a]) => (
+                    <button
+                      key={key}
+                      onClick={() => update({ accent: key })}
+                      className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+                        settings.accent === key ? "border-blue-500 bg-blue-950" : "border-neutral-700 hover:border-neutral-500"
+                      }`}
+                    >
+                      <span className="h-4 w-4 rounded-full" style={{ background: a.swatch ?? a.color }} />
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-500">Tema</p>
+                <div className="flex flex-wrap gap-2">
+                  {THEME_OPTIONS.map(({ key: t, label }) => (
+                    <button
+                      key={t}
+                      onClick={() => update(t === "keystudio" ? { theme: t, accent: "copper" } : { theme: t })}
+                      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${
+                        settings.theme === t ? "border-blue-500 bg-blue-950 text-blue-200" : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                      }`}
+                    >
+                      {t === "keystudio" && (
+                        <span
+                          aria-hidden
+                          className="h-4 w-4 rounded-full border border-[#e09060]"
+                          style={{ background: "linear-gradient(135deg, #0c0907 50%, #e09060 50%)" }}
+                        />
+                      )}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {settings.theme === "keystudio" && (
+                  <p className="text-[11px] text-neutral-500">
+                    Fundo preto e destaques no cobre da logo KeyStudio3D (a cor de destaque acima é ignorada neste tema).
+                  </p>
+                )}
+              </div>
+            </Card>
+
+            <Card
+              title="Categorias"
+              hint="Organize o catálogo da loja (ex.: Decoração, Chaveiros, Presentes). Marque os produtos de cada categoria logo abaixo, em “Produtos na loja”. Um produto pode estar em mais de uma."
+            >
+              {settings.categories.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhuma categoria ainda.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {settings.categories.map((c, i) => {
+                    const catProducts = c.product_ids
+                      .map((id) => productsById.get(id))
+                      .filter((p): p is Product => !!p);
+                    const photos = Array.from(new Set(catProducts.flatMap((p) => p.photo_urls)));
+                    const autoCover = photos[0] ?? "";
+                    const shownCover = c.cover_url || autoCover;
+                    const pickerOpen = coverPickerFor === c.id;
+                    return (
+                      <li key={c.id} className="space-y-2 rounded-lg border border-neutral-800 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
+                            {shownCover && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={imgSrc(shownCover, IMG_WIDTH.thumb)} alt="" className="h-full w-full object-cover" />
+                            )}
+                          </div>
+                          <input
+                            className={`${input} min-w-0 flex-1 basis-48`}
+                            placeholder="Nome da categoria"
+                            value={c.name}
+                            maxLength={60}
+                            onChange={(e) => renameCategory(c.id, e.target.value)}
+                          />
+                          <span className="w-20 text-xs text-neutral-500">
+                            {catProducts.length} produto(s)
+                          </span>
+                          <button onClick={() => moveCategory(i, -1)} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                            ↑
+                          </button>
+                          <button onClick={() => moveCategory(i, 1)} disabled={i === settings.categories.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                            ↓
+                          </button>
+                          <button onClick={() => removeCategory(c.id)} className="rounded border border-red-900 px-3 py-1.5 text-xs text-red-400 hover:bg-red-950">
+                            Apagar
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-neutral-500">
+                            Foto principal: {c.cover_url ? "escolhida por você" : "automática"}
+                          </span>
+                          <button
+                            onClick={() => setCoverPickerFor(pickerOpen ? null : c.id)}
+                            aria-expanded={pickerOpen}
+                            className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500"
+                          >
+                            {pickerOpen ? "Fechar" : "Escolher foto"}
+                          </button>
+                          {c.cover_url && (
+                            <button
+                              onClick={() => setCategoryCover(c.id, "")}
+                              className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-400 hover:border-neutral-500"
+                            >
+                              Voltar para automática
+                            </button>
+                          )}
+                        </div>
+                        {pickerOpen && (
+                          <div className="space-y-2 rounded-lg bg-neutral-900/60 p-3">
+                            {photos.length === 0 ? (
+                              <p className="text-xs text-neutral-500">
+                                Esta categoria ainda não tem produtos com foto. Marque produtos nela em “Produtos na loja” ou envie uma foto.
+                              </p>
+                            ) : (
+                              <>
+                                <p className="text-xs text-neutral-500">Toque na foto que será a principal desta categoria:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {photos.map((url) => {
+                                    const selected = shownCover === url && !!c.cover_url;
+                                    return (
+                                      <button
+                                        key={url}
+                                        onClick={() => setCategoryCover(c.id, url)}
+                                        aria-pressed={selected}
+                                        className={`h-16 w-16 overflow-hidden rounded border-2 ${
+                                          selected ? "border-blue-500" : "border-transparent hover:border-neutral-600"
+                                        }`}
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={imgSrc(url, IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+                            <label className="inline-block cursor-pointer rounded border border-dashed border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 hover:border-blue-500">
+                              {isUploading ? "Enviando…" : "+ Enviar outra foto"}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={isUploading}
+                                onChange={(e) => handleCategoryCoverUpload(c.id, e)}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {settings.categories.length < 30 && (
+                <button onClick={addCategory} className="text-sm text-blue-400 hover:underline">
+                  + Nova categoria
+                </button>
+              )}
+              {settings.categories.some((c) => !c.name.trim()) && (
+                <p className="text-xs text-yellow-400">Categorias sem nome são descartadas ao salvar.</p>
+              )}
+            </Card>
+
+            <Card
+              title="Ordem dos destaques"
+              hint="Os destaques aparecem na página inicial da loja nesta ordem (o primeiro fica à esquerda). Para incluir ou tirar um produto, use o botão ★ Destaque em “Produtos na loja”."
+            >
+              {featuredList.length === 0 ? (
+                <p className="text-sm text-neutral-500">
+                  Nenhum destaque marcado. Sem destaques, a loja mostra os primeiros produtos.
+                </p>
+              ) : (
+                <ol className="divide-y divide-neutral-800">
+                  {featuredList.map((p, i) => (
+                    <li key={p.id} className="flex items-center gap-3 py-2">
+                      <span className="w-6 text-right text-xs text-neutral-500">{i + 1}</span>
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-neutral-900">
+                        {p.photo_urls[0] && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        )}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm">{p.name}</p>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => moveFeatured(p.id, "top")} disabled={i === 0} aria-label="Mover para o início" title="Mover para o início" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ⤒
+                        </button>
+                        <button onClick={() => moveFeatured(p.id, "up")} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ↑
+                        </button>
+                        <button onClick={() => moveFeatured(p.id, "down")} disabled={i === featuredList.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ↓
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
+
+            <Card title="Produtos na loja" hint="Escolha o que aparece, o que fica em destaque e a ordem dos produtos na loja (↑ ↓ ⤒). O preço mostrado ao cliente é o preço de venda; custos nunca são exibidos.">
+              {products.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <SearchInput value={productSearch} onChange={setProductSearch} className="sm:flex-1" />
+                    <div className="flex gap-1.5">
+                      {(
+                        [
+                          ["all", "Todos"],
+                          ["visible", "Na loja"],
+                          ["hidden", "Ocultos"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setVisibilityFilter(key)}
+                          aria-pressed={visibilityFilter === key}
+                          className={`rounded-full border px-3 py-1.5 text-xs ${
+                            visibilityFilter === key
+                              ? "border-blue-500 bg-blue-950 text-blue-200"
+                              : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-neutral-500">
+                      {listedProducts.length} de {products.length} produto(s) ·{" "}
+                      {products.length - settings.hidden_product_ids.filter((id) => products.some((p) => p.id === id)).length} na loja
+                    </span>
+                    {listedProducts.length > 0 && (
+                      <>
+                        <button
+                          onClick={() => setVisibilityForListed(true)}
+                          className="rounded-full border border-green-800 px-3 py-1 text-green-300 hover:bg-green-950"
+                        >
+                          Mostrar {listedProducts.length === products.length ? "todos" : "estes"} na loja
+                        </button>
+                        <button
+                          onClick={() => setVisibilityForListed(false)}
+                          className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500"
+                        >
+                          Ocultar {listedProducts.length === products.length ? "todos" : "estes"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              {products.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum produto cadastrado.</p>
+              ) : listedProducts.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum produto encontrado.</p>
+              ) : (
+                <ul className="divide-y divide-neutral-800">
+                  {listedProducts.map((p, idx) => {
+                    const hidden = settings.hidden_product_ids.includes(p.id);
+                    const featured = settings.featured_product_ids.includes(p.id);
+                    const onRequest = settings.price_on_request_product_ids.includes(p.id);
+                    return (
+                      <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
+                          {p.photo_urls[0] && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 basis-40">
+                          <p className={`truncate text-sm font-medium ${hidden ? "text-neutral-500 line-through" : ""}`}>{p.name}</p>
+                          <p className="text-xs text-neutral-500">
+                            {onRequest
+                              ? "Preço a consultar na loja"
+                              : p.manual_price != null
+                                ? formatCurrency(p.manual_price)
+                                : "Preço calculado pela receita"}
+                            {p.stock_quantity === 0 ? " · Esgotado" : ""}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => moveProduct(p.id, "top")} disabled={idx === 0} aria-label="Mover para o início" title="Mover para o início" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ⤒
+                          </button>
+                          <button onClick={() => moveProduct(p.id, "up")} disabled={idx === 0} aria-label="Subir" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ↑
+                          </button>
+                          <button onClick={() => moveProduct(p.id, "down")} disabled={idx === listedProducts.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ↓
+                          </button>
+                        </div>
+                        <div className="flex w-full gap-2 sm:w-auto">
+                        <button
+                          onClick={() => toggleId("featured_product_ids", p.id)}
+                          disabled={hidden}
+                          title="Destaque"
+                          className={`rounded-full border px-3 py-1 text-xs disabled:opacity-30 ${
+                            featured ? "border-yellow-600 bg-yellow-950 text-yellow-300" : "border-neutral-700 text-neutral-400"
+                          }`}
+                        >
+                          ★ Destaque
+                        </button>
+                        <button
+                          onClick={() => toggleId("price_on_request_product_ids", p.id)}
+                          disabled={hidden}
+                          aria-pressed={onRequest}
+                          className={`rounded-full border px-3 py-1 text-xs disabled:opacity-30 ${
+                            onRequest ? "border-purple-600 bg-purple-950 text-purple-200" : "border-neutral-700 text-neutral-400"
+                          }`}
+                        >
+                          Preço a consultar
+                        </button>
+                        <button
+                          onClick={() => toggleId("hidden_product_ids", p.id)}
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            hidden ? "border-neutral-700 text-neutral-400" : "border-green-800 bg-green-950 text-green-300"
+                          }`}
+                        >
+                          {hidden ? "Oculto" : "Visível"}
+                        </button>
+                        </div>
+                        {settings.categories.some((c) => c.name.trim()) && (
+                          <div className="flex w-full flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] text-neutral-500">Categorias:</span>
+                            {settings.categories
+                              .filter((c) => c.name.trim())
+                              .map((c) => {
+                                const inCategory = c.product_ids.includes(p.id);
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => toggleCategory(c.id, p.id)}
+                                    aria-pressed={inCategory}
+                                    className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+                                      inCategory
+                                        ? "border-blue-600 bg-blue-950 text-blue-200"
+                                        : "border-neutral-800 text-neutral-500 hover:border-neutral-600"
+                                    }`}
+                                  >
+                                    {inCategory ? "✓ " : ""}
+                                    {c.name}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </>
+        )}
+      </div>
+
+      {!isLoading && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur lg:left-60">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <p className="text-xs text-neutral-500">
+                {restoredDraft
+                  ? "Recuperamos suas alterações não salvas"
+                  : dirty
+                    ? "Alterações não salvas (guardadas neste aparelho)"
+                    : "Tudo salvo"}
+              </p>
+              {dirty && (
+                <button onClick={discardDraft} className="shrink-0 text-xs text-neutral-400 underline hover:text-neutral-200">
+                  Descartar
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !dirty}
+              className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-40"
+            >
+              {isSaving ? "Salvando…" : "Salvar alterações"}
+            </button>
+          </div>
+        </div>
+      )}
+    </AppShell>
   );
 }

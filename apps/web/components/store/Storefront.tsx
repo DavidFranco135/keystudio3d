@@ -218,7 +218,13 @@ export function Storefront({ slug }: { slug: string }) {
         // isso a loja quebraria inteira em vez de só não mostrá-las.
         setStore({
           ...data,
-          settings: { ...data.settings, categories: data.settings.categories ?? [] },
+          settings: {
+            ...data.settings,
+            categories: (data.settings.categories ?? []).map((c) => ({
+              ...c,
+              cover_url: c.cover_url ?? "",
+            })),
+          },
           products: data.products.map((p) => ({
             ...p,
             category_ids: p.category_ids ?? [],
@@ -366,7 +372,7 @@ export function Storefront({ slug }: { slug: string }) {
     if (sort === "price-asc") list = [...list].sort((a, b) => byRequest(a, b) || a.price - b.price);
     else if (sort === "price-desc") list = [...list].sort((a, b) => byRequest(a, b) || b.price - a.price);
     else if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-    else list = [...list].sort((a, b) => Number(b.featured) - Number(a.featured));
+    // "Relevância": a ordem escolhida pelo lojista em Minha Loja (já vem do servidor).
     return list;
   }, [store, search, sort, onlyAvailable, category]);
 
@@ -398,9 +404,18 @@ export function Storefront({ slug }: { slug: string }) {
     `Olá, ${storeName}! Gostaria de saber mais sobre os produtos.`
   );
   const openProduct = openProductId ? productsById.get(openProductId) ?? null : null;
+  // Todos os destaques marcados, na ordem escolhida pelo lojista. (Antes a lista
+  // era cortada em 8 e seguia a ordem de cadastro, por isso "sumiam" destaques.)
+  // Só quando não há nenhum destaque mostramos os primeiros produtos.
   const featuredProducts = (() => {
-    const featured = store.products.filter((p) => p.featured);
-    return (featured.length > 0 ? featured : store.products).slice(0, 8);
+    const flagged = store.products.filter((p) => p.featured);
+    if (flagged.length === 0) return store.products.slice(0, 8);
+    const order = settings.featured_product_ids;
+    if (!order || order.length === 0) return flagged;
+    const rank = new Map(order.map((id, i) => [id, i]));
+    return [...flagged].sort(
+      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
   })();
   const slides: StoreSlide[] =
     settings.slides.length > 0
@@ -412,8 +427,14 @@ export function Storefront({ slug }: { slug: string }) {
 
   const categories = settings.categories.map((c) => {
     const items = store.products.filter((p) => p.category_ids.includes(c.id));
-    const cover = items.find((p) => p.photo_urls.length > 0) ?? null;
-    return { ...c, count: items.length, cover };
+    // Foto principal escolhida pelo lojista; sem escolha, a primeira foto dos produtos.
+    const chosen = c.cover_url || "";
+    const chosenOwner = chosen ? items.find((p) => p.photo_urls.includes(chosen)) ?? null : null;
+    const fallback = items.find((p) => p.photo_urls.length > 0) ?? null;
+    const coverUrl = chosen || fallback?.photo_urls[0] || "";
+    // Ponto de foco (enquadramento) vem do produto dono da foto, quando houver.
+    const focusOwner = chosenOwner ?? (chosen ? null : fallback);
+    return { ...c, count: items.length, coverUrl, focusOwner };
   });
   const activeCategory = categories.find((c) => c.id === category) ?? null;
 
@@ -592,13 +613,13 @@ export function Storefront({ slug }: { slug: string }) {
                           onClick={() => openCategory(c.id)}
                           className="fx-spotlight group relative flex aspect-[5/4] w-full overflow-hidden rounded-3xl bg-[var(--accent)] text-left shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-xl"
                         >
-                          {c.cover && (
+                          {c.coverUrl && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={imgSrc(c.cover.photo_urls[0], IMG_WIDTH.card)}
+                              src={imgSrc(c.coverUrl, IMG_WIDTH.card)}
                               alt=""
                               loading="lazy"
-                              style={focusStyle(c.cover.photo_focus, c.cover.photo_urls[0])}
+                              style={focusStyle(c.focusOwner?.photo_focus, c.coverUrl)}
                               className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.07]"
                             />
                           )}

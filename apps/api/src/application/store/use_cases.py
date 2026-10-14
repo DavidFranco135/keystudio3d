@@ -64,9 +64,14 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
 
     hidden_ids = set(settings.hidden_product_ids)
     all_products = ProductRepository(db).list_for_org(org.id)
-    visible_products = [
-        p for p in all_products if p.is_active and str(p.id) not in hidden_ids
-    ]
+    # Ordem personalizada (Minha Loja → Produtos). Quem não está na lista
+    # (produto novo) vai para o fim, mantendo a ordem de cadastro (sort estável).
+    order_index = {pid: i for i, pid in enumerate(settings.product_order)}
+    unlisted = len(order_index)
+    visible_products = sorted(
+        (p for p in all_products if p.is_active and str(p.id) not in hidden_ids),
+        key=lambda p: order_index.get(str(p.id), unlisted),
+    )
     default_profile = CostProfileRepository(db).get_default(org.id)
     computed = (
         list_products_costs(
@@ -80,6 +85,13 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     )
 
     featured = set(settings.featured_product_ids)
+    visible_ids = {str(p.id) for p in visible_products}
+    # Destaques visíveis na ordem escolhida pelo lojista (sem repetidos).
+    featured_ordered = [
+        pid
+        for pid in dict.fromkeys(settings.featured_product_ids)
+        if pid in visible_ids
+    ]
     on_request = set(settings.price_on_request_product_ids)
     named_categories = [c for c in settings.categories if c.name.strip()]
     categories_of: dict[str, list[str]] = {}
@@ -120,7 +132,9 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     # leva o cliente a uma lista sem nada.
     used = {cid for p in products for cid in p.category_ids}
     public_categories = [
-        PublicCategory(id=c.id, name=c.name.strip()) for c in named_categories if c.id in used
+        PublicCategory(id=c.id, name=c.name.strip(), cover_url=c.cover_url.strip())
+        for c in named_categories
+        if c.id in used
     ]
 
     response = PublicStoreResponse(
@@ -140,6 +154,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
             slides=settings.slides,
             highlights=settings.highlights,
             categories=public_categories,
+            featured_product_ids=featured_ordered,
         ),
         products=products,
     )

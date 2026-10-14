@@ -295,7 +295,7 @@ export default function ProdutosPage() {
     event.preventDefault();
     const name = newCategoryName.trim();
     if (!name) return;
-    if (await saveCategories([...categories, { id: newCategoryId(), name, product_ids: [] }])) {
+    if (await saveCategories([...categories, { id: newCategoryId(), name, product_ids: [], cover_url: "" }])) {
       setNewCategoryName("");
     }
   }

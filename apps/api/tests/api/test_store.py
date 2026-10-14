@@ -133,10 +133,10 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
     oculto = _product(client, org_id, headers, name="Oculto")
 
     categories = [
-        {"id": "deco", "name": "Decoração", "product_ids": [vaso["id"]]},
-        {"id": "brindes", "name": "Brindes", "product_ids": [vaso["id"], chaveiro["id"]]},
-        {"id": "vazia", "name": "Só oculto", "product_ids": [oculto["id"]]},
-        {"id": "sem-nome", "name": "  ", "product_ids": [chaveiro["id"]]},
+        {"id": "deco", "name": "Decoração", "product_ids": [vaso["id"]], "cover_url": "https://img/capa.jpg"},
+        {"id": "brindes", "name": "Brindes", "product_ids": [vaso["id"], chaveiro["id"]], "cover_url": ""},
+        {"id": "vazia", "name": "Só oculto", "product_ids": [oculto["id"]], "cover_url": ""},
+        {"id": "sem-nome", "name": "  ", "product_ids": [chaveiro["id"]], "cover_url": ""},
     ]
     response = client.put(
         f"/api/v1/organizations/{org_id}/store",
@@ -148,11 +148,36 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
 
     body = client.get(f"/api/v1/public/stores/{slug}").json()
     assert body["settings"]["categories"] == [
-        {"id": "deco", "name": "Decoração"},
-        {"id": "brindes", "name": "Brindes"},
+        {"id": "deco", "name": "Decoração", "cover_url": "https://img/capa.jpg"},
+        {"id": "brindes", "name": "Brindes", "cover_url": ""},
     ]
     by_name = {p["name"]: p["category_ids"] for p in body["products"]}
     assert by_name == {"Vaso": ["deco", "brindes"], "Chaveiro": ["brindes"]}
+
+
+def test_product_and_featured_order_are_respected_publicly(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    a = _product(client, org_id, headers, name="A")
+    b = _product(client, org_id, headers, name="B")
+    c = _product(client, org_id, headers, name="C")
+    d = _product(client, org_id, headers, name="D")
+
+    response = client.put(
+        f"/api/v1/organizations/{org_id}/store",
+        json={
+            "product_order": [c["id"], a["id"]],
+            "featured_product_ids": [d["id"], c["id"], a["id"], b["id"]],
+            "hidden_product_ids": [b["id"]],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    # C, A na ordem escolhida; D (fora da lista) vai para o fim.
+    assert [p["name"] for p in body["products"]] == ["C", "A", "D"]
+    # Destaques na ordem escolhida, sem o produto oculto.
+    assert body["settings"]["featured_product_ids"] == [d["id"], c["id"], a["id"]]
 
 
 def test_price_on_request_hides_the_price_publicly(client: TestClient):

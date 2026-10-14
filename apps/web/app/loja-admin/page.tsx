@@ -36,6 +36,7 @@ const EMPTY: StoreSettings = {
   highlights: [],
   hidden_product_ids: [],
   featured_product_ids: [],
+  product_order: [],
   price_on_request_product_ids: [],
   categories: [],
 };
@@ -74,6 +75,8 @@ export default function LojaAdminPage() {
   const [copied, setCopied] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
+  // Categoria cujo seletor de foto principal está aberto.
+  const [coverPickerFor, setCoverPickerFor] = useState<string | null>(null);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
   const draftKey = `loja-admin:${currentOrganizationId}`;
@@ -194,7 +197,29 @@ export default function LojaAdminPage() {
   }
 
   function addCategory() {
-    update({ categories: [...settings.categories, { id: newCategoryId(), name: "", product_ids: [] }] });
+    update({
+      categories: [...settings.categories, { id: newCategoryId(), name: "", product_ids: [], cover_url: "" }],
+    });
+  }
+
+  function setCategoryCover(id: string, url: string) {
+    update({ categories: settings.categories.map((c) => (c.id === id ? { ...c, cover_url: url } : c)) });
+  }
+
+  async function handleCategoryCoverUpload(categoryId: string, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      setCategoryCover(categoryId, url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar a foto da categoria.");
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function renameCategory(id: string, name: string) {
@@ -230,13 +255,75 @@ export default function LojaAdminPage() {
     });
   }
 
-  const listedProducts = products.filter((p) => {
+  // Produtos na ordem escolhida (os que ainda não têm posição vão para o fim,
+  // na ordem de cadastro — igual ao que a loja pública faz).
+  const orderedProducts = useMemo(() => {
+    const rank = new Map(settings.product_order.map((id, i) => [id, i]));
+    const fallback = settings.product_order.length;
+    return products
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => (rank.get(a.p.id) ?? fallback) - (rank.get(b.p.id) ?? fallback) || a.i - b.i)
+      .map(({ p }) => p);
+  }, [products, settings.product_order]);
+
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const listedProducts = orderedProducts.filter((p) => {
     const hidden = settings.hidden_product_ids.includes(p.id);
     return (
       matchesSearch(productSearch, p.name, p.description) &&
       (visibilityFilter === "all" || (visibilityFilter === "hidden") === hidden)
     );
   });
+
+  // Move um produto na lista (trocando de lugar com o vizinho da lista que está
+  // sendo exibida — assim funciona também com busca/filtro ativos) ou para o topo.
+  function moveProduct(id: string, action: "up" | "down" | "top") {
+    const full = orderedProducts.map((p) => p.id);
+    const from = full.indexOf(id);
+    if (from < 0) return;
+    if (action === "top") {
+      if (from === 0) return;
+      update({ product_order: [id, ...full.filter((x) => x !== id)] });
+      return;
+    }
+    const shown = listedProducts.map((p) => p.id);
+    const at = shown.indexOf(id);
+    const neighbor = shown[at + (action === "up" ? -1 : 1)];
+    if (neighbor === undefined) return;
+    const to = full.indexOf(neighbor);
+    const next = [...full];
+    [next[from], next[to]] = [next[to], next[from]];
+    update({ product_order: next });
+  }
+
+  // Destaques visíveis, na ordem escolhida.
+  const featuredList = useMemo(
+    () =>
+      Array.from(new Set(settings.featured_product_ids))
+        .map((id) => productsById.get(id))
+        .filter((p): p is Product => !!p && !settings.hidden_product_ids.includes(p.id)),
+    [settings.featured_product_ids, settings.hidden_product_ids, productsById]
+  );
+
+  function moveFeatured(id: string, action: "up" | "down" | "top") {
+    const ids = featuredList.map((p) => p.id);
+    const from = ids.indexOf(id);
+    if (from < 0) return;
+    const next = [...ids];
+    if (action === "top") {
+      if (from === 0) return;
+      next.splice(from, 1);
+      next.unshift(id);
+    } else {
+      const to = from + (action === "up" ? -1 : 1);
+      if (to < 0 || to >= next.length) return;
+      [next[from], next[to]] = [next[to], next[from]];
+    }
+    // Mantém no fim os destaques de produtos ocultos/removidos (não aparecem aqui).
+    const rest = settings.featured_product_ids.filter((x) => !next.includes(x));
+    update({ featured_product_ids: [...next, ...rest] });
+  }
 
   // Mostra/oculta de uma vez todos os produtos que estão na lista filtrada.
   function setVisibilityForListed(visible: boolean) {
@@ -254,6 +341,8 @@ export default function LojaAdminPage() {
         ...settings,
         whatsapp: normalizeWhatsapp(settings.whatsapp) || DEFAULT_WHATSAPP,
         highlights: settings.highlights.filter((h) => h.title.trim() || h.text.trim()),
+        // Só grava a ordem se o lojista reordenou; assim ids apagados saem da lista.
+        product_order: settings.product_order.length > 0 ? orderedProducts.map((p) => p.id) : [],
         categories: settings.categories
           .filter((c) => c.name.trim())
           .map((c) => ({ ...c, name: c.name.trim() })),
@@ -533,29 +622,107 @@ export default function LojaAdminPage() {
                 <p className="text-sm text-neutral-500">Nenhuma categoria ainda.</p>
               ) : (
                 <ul className="space-y-2">
-                  {settings.categories.map((c, i) => (
-                    <li key={c.id} className="flex flex-wrap items-center gap-2">
-                      <input
-                        className={`${input} min-w-0 flex-1 basis-48`}
-                        placeholder="Nome da categoria"
-                        value={c.name}
-                        maxLength={60}
-                        onChange={(e) => renameCategory(c.id, e.target.value)}
-                      />
-                      <span className="w-20 text-xs text-neutral-500">
-                        {c.product_ids.filter((id) => products.some((p) => p.id === id)).length} produto(s)
-                      </span>
-                      <button onClick={() => moveCategory(i, -1)} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
-                        ↑
-                      </button>
-                      <button onClick={() => moveCategory(i, 1)} disabled={i === settings.categories.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
-                        ↓
-                      </button>
-                      <button onClick={() => removeCategory(c.id)} className="rounded border border-red-900 px-3 py-1.5 text-xs text-red-400 hover:bg-red-950">
-                        Apagar
-                      </button>
-                    </li>
-                  ))}
+                  {settings.categories.map((c, i) => {
+                    const catProducts = c.product_ids
+                      .map((id) => productsById.get(id))
+                      .filter((p): p is Product => !!p);
+                    const photos = Array.from(new Set(catProducts.flatMap((p) => p.photo_urls)));
+                    const autoCover = photos[0] ?? "";
+                    const shownCover = c.cover_url || autoCover;
+                    const pickerOpen = coverPickerFor === c.id;
+                    return (
+                      <li key={c.id} className="space-y-2 rounded-lg border border-neutral-800 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
+                            {shownCover && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={imgSrc(shownCover, IMG_WIDTH.thumb)} alt="" className="h-full w-full object-cover" />
+                            )}
+                          </div>
+                          <input
+                            className={`${input} min-w-0 flex-1 basis-48`}
+                            placeholder="Nome da categoria"
+                            value={c.name}
+                            maxLength={60}
+                            onChange={(e) => renameCategory(c.id, e.target.value)}
+                          />
+                          <span className="w-20 text-xs text-neutral-500">
+                            {catProducts.length} produto(s)
+                          </span>
+                          <button onClick={() => moveCategory(i, -1)} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                            ↑
+                          </button>
+                          <button onClick={() => moveCategory(i, 1)} disabled={i === settings.categories.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-3 py-1.5 text-xs disabled:opacity-30">
+                            ↓
+                          </button>
+                          <button onClick={() => removeCategory(c.id)} className="rounded border border-red-900 px-3 py-1.5 text-xs text-red-400 hover:bg-red-950">
+                            Apagar
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-neutral-500">
+                            Foto principal: {c.cover_url ? "escolhida por você" : "automática"}
+                          </span>
+                          <button
+                            onClick={() => setCoverPickerFor(pickerOpen ? null : c.id)}
+                            aria-expanded={pickerOpen}
+                            className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500"
+                          >
+                            {pickerOpen ? "Fechar" : "Escolher foto"}
+                          </button>
+                          {c.cover_url && (
+                            <button
+                              onClick={() => setCategoryCover(c.id, "")}
+                              className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-400 hover:border-neutral-500"
+                            >
+                              Voltar para automática
+                            </button>
+                          )}
+                        </div>
+                        {pickerOpen && (
+                          <div className="space-y-2 rounded-lg bg-neutral-900/60 p-3">
+                            {photos.length === 0 ? (
+                              <p className="text-xs text-neutral-500">
+                                Esta categoria ainda não tem produtos com foto. Marque produtos nela em “Produtos na loja” ou envie uma foto.
+                              </p>
+                            ) : (
+                              <>
+                                <p className="text-xs text-neutral-500">Toque na foto que será a principal desta categoria:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {photos.map((url) => {
+                                    const selected = shownCover === url && !!c.cover_url;
+                                    return (
+                                      <button
+                                        key={url}
+                                        onClick={() => setCategoryCover(c.id, url)}
+                                        aria-pressed={selected}
+                                        className={`h-16 w-16 overflow-hidden rounded border-2 ${
+                                          selected ? "border-blue-500" : "border-transparent hover:border-neutral-600"
+                                        }`}
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={imgSrc(url, IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+                            <label className="inline-block cursor-pointer rounded border border-dashed border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 hover:border-blue-500">
+                              {isUploading ? "Enviando…" : "+ Enviar outra foto"}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={isUploading}
+                                onChange={(e) => handleCategoryCoverUpload(c.id, e)}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {settings.categories.length < 30 && (
@@ -568,7 +735,44 @@ export default function LojaAdminPage() {
               )}
             </Card>
 
-            <Card title="Produtos na loja" hint="Escolha o que aparece e o que fica em destaque. O preço mostrado ao cliente é o preço de venda; custos nunca são exibidos.">
+            <Card
+              title="Ordem dos destaques"
+              hint="Os destaques aparecem na página inicial da loja nesta ordem (o primeiro fica à esquerda). Para incluir ou tirar um produto, use o botão ★ Destaque em “Produtos na loja”."
+            >
+              {featuredList.length === 0 ? (
+                <p className="text-sm text-neutral-500">
+                  Nenhum destaque marcado. Sem destaques, a loja mostra os primeiros produtos.
+                </p>
+              ) : (
+                <ol className="divide-y divide-neutral-800">
+                  {featuredList.map((p, i) => (
+                    <li key={p.id} className="flex items-center gap-3 py-2">
+                      <span className="w-6 text-right text-xs text-neutral-500">{i + 1}</span>
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-neutral-900">
+                        {p.photo_urls[0] && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        )}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm">{p.name}</p>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => moveFeatured(p.id, "top")} disabled={i === 0} aria-label="Mover para o início" title="Mover para o início" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ⤒
+                        </button>
+                        <button onClick={() => moveFeatured(p.id, "up")} disabled={i === 0} aria-label="Subir" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ↑
+                        </button>
+                        <button onClick={() => moveFeatured(p.id, "down")} disabled={i === featuredList.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                          ↓
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
+
+            <Card title="Produtos na loja" hint="Escolha o que aparece, o que fica em destaque e a ordem dos produtos na loja (↑ ↓ ⤒). O preço mostrado ao cliente é o preço de venda; custos nunca são exibidos.">
               {products.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -626,7 +830,7 @@ export default function LojaAdminPage() {
                 <p className="text-sm text-neutral-500">Nenhum produto encontrado.</p>
               ) : (
                 <ul className="divide-y divide-neutral-800">
-                  {listedProducts.map((p) => {
+                  {listedProducts.map((p, idx) => {
                     const hidden = settings.hidden_product_ids.includes(p.id);
                     const featured = settings.featured_product_ids.includes(p.id);
                     const onRequest = settings.price_on_request_product_ids.includes(p.id);
@@ -648,6 +852,17 @@ export default function LojaAdminPage() {
                                 : "Preço calculado pela receita"}
                             {p.stock_quantity === 0 ? " · Esgotado" : ""}
                           </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => moveProduct(p.id, "top")} disabled={idx === 0} aria-label="Mover para o início" title="Mover para o início" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ⤒
+                          </button>
+                          <button onClick={() => moveProduct(p.id, "up")} disabled={idx === 0} aria-label="Subir" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ↑
+                          </button>
+                          <button onClick={() => moveProduct(p.id, "down")} disabled={idx === listedProducts.length - 1} aria-label="Descer" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
+                            ↓
+                          </button>
                         </div>
                         <div className="flex w-full gap-2 sm:w-auto">
                         <button

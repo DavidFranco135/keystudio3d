@@ -1,7 +1,8 @@
 export type StoreSlide = { url: string; title: string; subtitle: string };
 export type StoreHighlight = { title: string; text: string };
-export type StoreCategory = { id: string; name: string; product_ids: string[] };
-export type PublicCategory = { id: string; name: string };
+// cover_url: foto principal da categoria na vitrine ("" = automática).
+export type StoreCategory = { id: string; name: string; product_ids: string[]; cover_url: string };
+export type PublicCategory = { id: string; name: string; cover_url: string };
 
 // "keystudio": tema da marca — preto quente e cobre, como a logo KeyStudio3D.
 export type StoreTheme = "light" | "dark" | "keystudio";
@@ -26,7 +27,10 @@ export type StoreSettings = {
   slides: StoreSlide[];
   highlights: StoreHighlight[];
   hidden_product_ids: string[];
+  // A ordem de featured_product_ids é a ordem dos destaques na vitrine.
   featured_product_ids: string[];
+  // Ordem personalizada dos produtos na vitrine.
+  product_order: string[];
   price_on_request_product_ids: string[];
   categories: StoreCategory[];
 };
@@ -53,9 +57,15 @@ export type PublicStore = {
   name: string;
   settings: Omit<
     StoreSettings,
-    "hidden_product_ids" | "featured_product_ids" | "price_on_request_product_ids" | "categories"
+    | "hidden_product_ids"
+    | "featured_product_ids"
+    | "product_order"
+    | "price_on_request_product_ids"
+    | "categories"
   > & {
     categories: PublicCategory[];
+    // Destaques visíveis, já na ordem escolhida (servidores antigos não mandam).
+    featured_product_ids?: string[];
   };
   products: PublicProduct[];
 };

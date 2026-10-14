@@ -715,6 +715,9 @@ class StoreCategory(BaseModel):
     id: str = Field(min_length=1, max_length=40)
     name: str = Field(default="", max_length=60)
     product_ids: list[str] = Field(default_factory=list)
+    # Foto principal da categoria na vitrine (URL escolhida pelo lojista).
+    # Vazio = automática (primeira foto dos produtos da categoria).
+    cover_url: str = Field(default="", max_length=2000)
 
 
 class StoreSettings(BaseModel):
@@ -736,7 +739,11 @@ class StoreSettings(BaseModel):
     slides: list[StoreSlide] = Field(default_factory=list, max_length=10)
     highlights: list[StoreHighlight] = Field(default_factory=list, max_length=3)
     hidden_product_ids: list[str] = Field(default_factory=list)
+    # A ordem desta lista é a ordem dos destaques na vitrine.
     featured_product_ids: list[str] = Field(default_factory=list)
+    # Ordem personalizada dos produtos na vitrine (ids). Produtos que não estão
+    # na lista (novos) aparecem depois, na ordem de cadastro.
+    product_order: list[str] = Field(default_factory=list)
     # Produtos exibidos como "Preço a consultar" na loja pública.
     price_on_request_product_ids: list[str] = Field(default_factory=list)
     categories: list[StoreCategory] = Field(default_factory=list, max_length=30)
@@ -767,6 +774,7 @@ class PublicProduct(BaseModel):
 class PublicCategory(BaseModel):
     id: str
     name: str
+    cover_url: str = ""
 
 
 class PublicStoreSettings(BaseModel):
@@ -783,6 +791,8 @@ class PublicStoreSettings(BaseModel):
     slides: list[StoreSlide]
     highlights: list[StoreHighlight]
     categories: list[PublicCategory] = Field(default_factory=list)
+    # Ids dos destaques visíveis, já na ordem escolhida pelo lojista.
+    featured_product_ids: list[str] = Field(default_factory=list)
 
 
 class PublicStoreResponse(BaseModel):

@@ -132,7 +132,13 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     # leva o cliente a uma lista sem nada.
     used = {cid for p in products for cid in p.category_ids}
     public_categories = [
-        PublicCategory(id=c.id, name=c.name.strip(), cover_url=c.cover_url.strip())
+        PublicCategory(
+            id=c.id,
+            name=c.name.strip(),
+            cover_url=c.cover_url.strip(),
+            cover_x=c.cover_x,
+            cover_y=c.cover_y,
+        )
         for c in named_categories
         if c.id in used
     ]

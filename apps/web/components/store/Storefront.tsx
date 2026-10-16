@@ -429,12 +429,14 @@ export function Storefront({ slug }: { slug: string }) {
     const items = store.products.filter((p) => p.category_ids.includes(c.id));
     // Foto principal escolhida pelo lojista; sem escolha, a primeira foto dos produtos.
     const chosen = c.cover_url || "";
-    const chosenOwner = chosen ? items.find((p) => p.photo_urls.includes(chosen)) ?? null : null;
     const fallback = items.find((p) => p.photo_urls.length > 0) ?? null;
     const coverUrl = chosen || fallback?.photo_urls[0] || "";
-    // Ponto de foco (enquadramento) vem do produto dono da foto, quando houver.
-    const focusOwner = chosenOwner ?? (chosen ? null : fallback);
-    return { ...c, count: items.length, coverUrl, focusOwner };
+    // Foto escolhida: usa o enquadramento definido na categoria. Automática: usa o
+    // enquadramento do produto dono da foto.
+    const coverStyle = chosen
+      ? { objectPosition: `${c.cover_x ?? 50}% ${c.cover_y ?? 50}%` }
+      : focusStyle(fallback?.photo_focus, coverUrl);
+    return { ...c, count: items.length, coverUrl, coverStyle };
   });
   const activeCategory = categories.find((c) => c.id === category) ?? null;
 
@@ -619,7 +621,7 @@ export function Storefront({ slug }: { slug: string }) {
                               src={imgSrc(c.coverUrl, IMG_WIDTH.card)}
                               alt=""
                               loading="lazy"
-                              style={focusStyle(c.focusOwner?.photo_focus, c.coverUrl)}
+                              style={c.coverStyle}
                               className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.07]"
                             />
                           )}

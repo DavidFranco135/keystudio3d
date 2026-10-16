@@ -132,11 +132,21 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
     chaveiro = _product(client, org_id, headers, name="Chaveiro")
     oculto = _product(client, org_id, headers, name="Oculto")
 
+    def cat(cid, name, product_ids, cover_url="", x=50, y=50):
+        return {
+            "id": cid,
+            "name": name,
+            "product_ids": product_ids,
+            "cover_url": cover_url,
+            "cover_x": x,
+            "cover_y": y,
+        }
+
     categories = [
-        {"id": "deco", "name": "Decoração", "product_ids": [vaso["id"]], "cover_url": "https://img/capa.jpg"},
-        {"id": "brindes", "name": "Brindes", "product_ids": [vaso["id"], chaveiro["id"]], "cover_url": ""},
-        {"id": "vazia", "name": "Só oculto", "product_ids": [oculto["id"]], "cover_url": ""},
-        {"id": "sem-nome", "name": "  ", "product_ids": [chaveiro["id"]], "cover_url": ""},
+        cat("deco", "Decoração", [vaso["id"]], "https://img/capa.jpg", 20, 75),
+        cat("brindes", "Brindes", [vaso["id"], chaveiro["id"]]),
+        cat("vazia", "Só oculto", [oculto["id"]]),
+        cat("sem-nome", "  ", [chaveiro["id"]]),
     ]
     response = client.put(
         f"/api/v1/organizations/{org_id}/store",
@@ -148,8 +158,8 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
 
     body = client.get(f"/api/v1/public/stores/{slug}").json()
     assert body["settings"]["categories"] == [
-        {"id": "deco", "name": "Decoração", "cover_url": "https://img/capa.jpg"},
-        {"id": "brindes", "name": "Brindes", "cover_url": ""},
+        {"id": "deco", "name": "Decoração", "cover_url": "https://img/capa.jpg", "cover_x": 20, "cover_y": 75},
+        {"id": "brindes", "name": "Brindes", "cover_url": "", "cover_x": 50, "cover_y": 50},
     ]
     by_name = {p["name"]: p["category_ids"] for p in body["products"]}
     assert by_name == {"Vaso": ["deco", "brindes"], "Chaveiro": ["brindes"]}

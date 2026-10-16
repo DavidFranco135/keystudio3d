@@ -1,8 +1,16 @@
 export type StoreSlide = { url: string; title: string; subtitle: string };
 export type StoreHighlight = { title: string; text: string };
 // cover_url: foto principal da categoria na vitrine ("" = automática).
-export type StoreCategory = { id: string; name: string; product_ids: string[]; cover_url: string };
-export type PublicCategory = { id: string; name: string; cover_url: string };
+// cover_x / cover_y: enquadramento da foto principal (0-100, 50 = centro).
+export type StoreCategory = {
+  id: string;
+  name: string;
+  product_ids: string[];
+  cover_url: string;
+  cover_x?: number;
+  cover_y?: number;
+};
+export type PublicCategory = { id: string; name: string; cover_url: string; cover_x?: number; cover_y?: number };
 
 // "keystudio": tema da marca — preto quente e cobre, como a logo KeyStudio3D.
 export type StoreTheme = "light" | "dark" | "keystudio";

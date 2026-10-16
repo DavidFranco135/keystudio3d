@@ -81,7 +81,7 @@ export default function LojaAdminPage() {
   const [coverPickerFor, setCoverPickerFor] = useState<string | null>(null);
   // Enquadramento aberto: foto de um produto (destaque/lista) ou capa de categoria.
   const [framing, setFraming] = useState<{
-    kind: "product" | "category";
+    kind: "product" | "category" | "slide";
     id: string;
     url: string;
     initial: { x: number; y: number };
@@ -232,8 +232,32 @@ export default function LojaAdminPage() {
     setFraming({ kind: "category", id, url, initial });
   }
 
+  function openSlideFrame(index: number) {
+    const slide = settings.slides[index];
+    if (!slide) return;
+    setFraming({
+      kind: "slide",
+      id: String(index),
+      url: slide.url,
+      initial: { x: slide.x ?? 50, y: slide.y ?? 50 },
+    });
+  }
+
+  // Volta o slide para "foto inteira, sem corte".
+  function clearSlideFrame(index: number) {
+    update({ slides: settings.slides.map((s, j) => (j === index ? { ...s, x: null, y: null } : s)) });
+  }
+
   async function handleSaveFrame(pos: { x: number; y: number }) {
     if (!framing) return;
+    if (framing.kind === "slide") {
+      // Slides fazem parte das configurações da loja: gravam em "Salvar alterações".
+      const index = Number(framing.id);
+      update({ slides: settings.slides.map((s, j) => (j === index ? { ...s, x: pos.x, y: pos.y } : s)) });
+      setFraming(null);
+      setMessage("Enquadramento do slide aplicado. Clique em “Salvar alterações” para publicar.");
+      return;
+    }
     if (framing.kind === "category") {
       // A capa é parte das configurações da loja: grava ao clicar em "Salvar alterações".
       update({
@@ -543,7 +567,16 @@ export default function LojaAdminPage() {
                   {settings.slides.map((slide, i) => (
                     <li key={`${slide.url}-${i}`} className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3 sm:flex-row">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={slide.url} alt="" className="h-24 w-full rounded object-cover sm:w-40" />
+                      <img
+                        src={slide.url}
+                        alt=""
+                        className="h-24 w-full rounded object-cover sm:w-40"
+                        style={
+                          slide.x != null && slide.y != null
+                            ? { objectPosition: `${slide.x}% ${slide.y}%` }
+                            : undefined
+                        }
+                      />
                       <div className="flex-1 space-y-2">
                         <input
                           className={input}
@@ -570,7 +603,22 @@ export default function LojaAdminPage() {
                           }
                         />
                       </div>
-                      <div className="flex gap-2 sm:flex-col">
+                      <div className="flex flex-wrap gap-2 sm:flex-col">
+                        <button
+                          onClick={() => openSlideFrame(i)}
+                          className="rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-500"
+                        >
+                          Enquadrar
+                        </button>
+                        {slide.x != null && slide.y != null && (
+                          <button
+                            onClick={() => clearSlideFrame(i)}
+                            title="Mostrar a foto inteira, sem corte"
+                            className="rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500"
+                          >
+                            Foto inteira
+                          </button>
+                        )}
                         <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="rounded border border-neutral-700 px-3 py-1 text-xs disabled:opacity-30">
                           ↑
                         </button>
@@ -1086,17 +1134,27 @@ export default function LojaAdminPage() {
           saving={isSavingFrame}
           onCancel={() => setFraming(null)}
           onSave={handleSaveFrame}
-          {...(framing.kind === "category"
+          {...(framing.kind === "slide"
             ? {
-                aspect: 5 / 4,
-                title: "Enquadrar capa da categoria",
-                hint: "Arraste a foto dentro do quadro para escolher a parte que aparece na capa da categoria, na loja.",
-                previews: [{ label: "Capa na loja", aspect: 5 / 4, width: 128 }],
+                aspect: 16 / 9,
+                title: "Enquadrar foto da capa",
+                hint: "Arraste a foto dentro do quadro para escolher a parte que aparece na capa da loja. A foto passa a preencher a capa (as bordas podem ser cortadas).",
+                previews: [
+                  { label: "Computador", aspect: 16 / 9, width: 176 },
+                  { label: "Celular", aspect: 4 / 3, width: 128 },
+                ],
               }
-            : {
-                title: "Enquadrar foto do produto",
-                hint: "Arraste a foto dentro do quadrado para escolher a parte que aparece no destaque, no catálogo e na loja.",
-              })}
+            : framing.kind === "category"
+              ? {
+                  aspect: 5 / 4,
+                  title: "Enquadrar capa da categoria",
+                  hint: "Arraste a foto dentro do quadro para escolher a parte que aparece na capa da categoria, na loja.",
+                  previews: [{ label: "Capa na loja", aspect: 5 / 4, width: 128 }],
+                }
+              : {
+                  title: "Enquadrar foto do produto",
+                  hint: "Arraste a foto dentro do quadrado para escolher a parte que aparece no destaque, no catálogo e na loja.",
+                })}
         />
       )}
     </AppShell>

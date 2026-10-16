@@ -20,6 +20,8 @@ import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { SearchInput } from "@/components/SearchInput";
 import { matchesSearch } from "@/lib/search";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
+import { focusFor, focusStyle } from "@/lib/focus";
+import { PhotoFramer } from "@/components/PhotoFramer";
 
 const EMPTY: StoreSettings = {
   display_name: "",
@@ -77,6 +79,14 @@ export default function LojaAdminPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   // Categoria cujo seletor de foto principal está aberto.
   const [coverPickerFor, setCoverPickerFor] = useState<string | null>(null);
+  // Enquadramento aberto: foto de um produto (destaque/lista) ou capa de categoria.
+  const [framing, setFraming] = useState<{
+    kind: "product" | "category";
+    id: string;
+    url: string;
+    initial: { x: number; y: number };
+  } | null>(null);
+  const [isSavingFrame, setIsSavingFrame] = useState(false);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
   const draftKey = `loja-admin:${currentOrganizationId}`;
@@ -202,8 +212,63 @@ export default function LojaAdminPage() {
     });
   }
 
+  // Trocar a foto volta o enquadramento para o centro.
   function setCategoryCover(id: string, url: string) {
-    update({ categories: settings.categories.map((c) => (c.id === id ? { ...c, cover_url: url } : c)) });
+    update({
+      categories: settings.categories.map((c) =>
+        c.id === id ? { ...c, cover_url: url, cover_x: 50, cover_y: 50 } : c
+      ),
+    });
+  }
+
+  function openProductFrame(p: Product) {
+    const url = p.photo_urls[0];
+    if (!url) return;
+    setFraming({ kind: "product", id: p.id, url, initial: focusFor(p.photo_focus, url) });
+  }
+
+  function openCategoryFrame(id: string, url: string, initial: { x: number; y: number }) {
+    if (!url) return;
+    setFraming({ kind: "category", id, url, initial });
+  }
+
+  async function handleSaveFrame(pos: { x: number; y: number }) {
+    if (!framing) return;
+    if (framing.kind === "category") {
+      // A capa é parte das configurações da loja: grava ao clicar em "Salvar alterações".
+      update({
+        categories: settings.categories.map((c) =>
+          c.id === framing.id ? { ...c, cover_url: framing.url, cover_x: pos.x, cover_y: pos.y } : c
+        ),
+      });
+      setFraming(null);
+      setMessage("Enquadramento da capa aplicado. Clique em “Salvar alterações” para publicar.");
+      return;
+    }
+    // Foto de produto: mesmo enquadramento do catálogo (vale no catálogo, nos destaques e na loja).
+    if (!accessToken) return;
+    const product = products.find((x) => x.id === framing.id);
+    if (!product) return;
+    setIsSavingFrame(true);
+    setError(null);
+    try {
+      const others = product.photo_focus.filter(
+        (f) => f.url !== framing.url && product.photo_urls.includes(f.url)
+      );
+      const updated = await apiFetch<Product>(`${orgPath}/products/${product.id}`, {
+        method: "PATCH",
+        accessToken,
+        body: JSON.stringify({ photo_focus: [...others, { url: framing.url, ...pos }] }),
+      });
+      setProducts((items) => items.map((x) => (x.id === updated.id ? updated : x)));
+      refreshPublicStoreCache(slug);
+      setFraming(null);
+      setMessage("Enquadramento salvo. A loja pública atualiza em até 1 minuto.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao salvar o enquadramento.");
+    } finally {
+      setIsSavingFrame(false);
+    }
   }
 
   async function handleCategoryCoverUpload(categoryId: string, event: React.ChangeEvent<HTMLInputElement>) {
@@ -352,12 +417,26 @@ export default function LojaAdminPage() {
         accessToken,
         body: JSON.stringify(body),
       });
+      // Uma API antiga (ainda não republicada) ignora em silêncio os campos
+      // novos: a foto da categoria e a ordem não seriam gravadas. Avisa.
+      const savedAny = saved.settings as Partial<StoreSettings>;
+      const apiIsOld =
+        (body.product_order.length > 0 && savedAny.product_order === undefined) ||
+        (body.categories.some((c) => c.cover_url) &&
+          (savedAny.categories ?? []).some((c) => (c as { cover_url?: string }).cover_url === undefined));
       setSettings({ ...EMPTY, ...saved.settings });
       setDirty(false);
       clearDraft(draftKey);
       setRestoredDraft(false);
       refreshPublicStoreCache(saved.slug);
-      setMessage("Alterações salvas. A loja pública atualiza em alguns segundos.");
+      if (apiIsOld) {
+        setError(
+          "Salvo, mas a API publicada ainda é a versão antiga: a ordem dos produtos e a foto das categorias NÃO foram gravadas. Republique a API (firebase deploy --only functions) e salve de novo."
+        );
+        setMessage(null);
+      } else {
+        setMessage("Alterações salvas. A loja pública atualiza em até 1 minuto.");
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao salvar.");
     } finally {
@@ -630,13 +709,22 @@ export default function LojaAdminPage() {
                     const autoCover = photos[0] ?? "";
                     const shownCover = c.cover_url || autoCover;
                     const pickerOpen = coverPickerFor === c.id;
+                    const autoOwner = catProducts.find((p) => p.photo_urls.includes(autoCover));
+                    const coverPos = c.cover_url
+                      ? { x: c.cover_x ?? 50, y: c.cover_y ?? 50 }
+                      : focusFor(autoOwner?.photo_focus, autoCover);
                     return (
                       <li key={c.id} className="space-y-2 rounded-lg border border-neutral-800 p-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
                             {shownCover && (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={imgSrc(shownCover, IMG_WIDTH.thumb)} alt="" className="h-full w-full object-cover" />
+                              <img
+                                src={imgSrc(shownCover, IMG_WIDTH.thumb)}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                style={{ objectPosition: `${coverPos.x}% ${coverPos.y}%` }}
+                              />
                             )}
                           </div>
                           <input
@@ -669,6 +757,13 @@ export default function LojaAdminPage() {
                             className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500"
                           >
                             {pickerOpen ? "Fechar" : "Escolher foto"}
+                          </button>
+                          <button
+                            onClick={() => openCategoryFrame(c.id, shownCover, coverPos)}
+                            disabled={!shownCover}
+                            className="rounded-full border border-neutral-700 px-3 py-1 text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
+                          >
+                            Enquadrar
                           </button>
                           {c.cover_url && (
                             <button
@@ -751,11 +846,24 @@ export default function LojaAdminPage() {
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-neutral-900">
                         {p.photo_urls[0] && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          <img
+                            src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                            style={focusStyle(p.photo_focus, p.photo_urls[0])}
+                          />
                         )}
                       </div>
                       <p className="min-w-0 flex-1 truncate text-sm">{p.name}</p>
-                      <div className="flex gap-1.5">
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        <button
+                          onClick={() => openProductFrame(p)}
+                          disabled={!p.photo_urls[0]}
+                          className="rounded border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
+                        >
+                          Enquadrar
+                        </button>
                         <button onClick={() => moveFeatured(p.id, "top")} disabled={i === 0} aria-label="Mover para o início" title="Mover para o início" className="rounded border border-neutral-700 px-2.5 py-1 text-xs disabled:opacity-30">
                           ⤒
                         </button>
@@ -839,7 +947,13 @@ export default function LojaAdminPage() {
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-neutral-900">
                           {p.photo_urls[0] && (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                            <img
+                              src={imgSrc(p.photo_urls[0], IMG_WIDTH.thumb)}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                              style={focusStyle(p.photo_focus, p.photo_urls[0])}
+                            />
                           )}
                         </div>
                         <div className="min-w-0 flex-1 basis-40">
@@ -874,6 +988,14 @@ export default function LojaAdminPage() {
                           }`}
                         >
                           ★ Destaque
+                        </button>
+                        <button
+                          onClick={() => openProductFrame(p)}
+                          disabled={!p.photo_urls[0]}
+                          title="Enquadrar a foto"
+                          className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 disabled:opacity-30"
+                        >
+                          Enquadrar
                         </button>
                         <button
                           onClick={() => toggleId("price_on_request_product_ids", p.id)}
@@ -955,6 +1077,27 @@ export default function LojaAdminPage() {
             </button>
           </div>
         </div>
+      )}
+      {framing && (
+        <PhotoFramer
+          key={`${framing.kind}:${framing.id}:${framing.url}`}
+          url={framing.url}
+          initial={framing.initial}
+          saving={isSavingFrame}
+          onCancel={() => setFraming(null)}
+          onSave={handleSaveFrame}
+          {...(framing.kind === "category"
+            ? {
+                aspect: 5 / 4,
+                title: "Enquadrar capa da categoria",
+                hint: "Arraste a foto dentro do quadro para escolher a parte que aparece na capa da categoria, na loja.",
+                previews: [{ label: "Capa na loja", aspect: 5 / 4, width: 128 }],
+              }
+            : {
+                title: "Enquadrar foto do produto",
+                hint: "Arraste a foto dentro do quadrado para escolher a parte que aparece no destaque, no catálogo e na loja.",
+              })}
+        />
       )}
     </AppShell>
   );

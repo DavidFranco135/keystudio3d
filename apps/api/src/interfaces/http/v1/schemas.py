@@ -718,6 +718,9 @@ class StoreCategory(BaseModel):
     # Foto principal da categoria na vitrine (URL escolhida pelo lojista).
     # Vazio = automática (primeira foto dos produtos da categoria).
     cover_url: str = Field(default="", max_length=2000)
+    # Enquadramento da foto principal (ponto de foco, 0-100; 50/50 = centro).
+    cover_x: float = Field(default=50, ge=0, le=100)
+    cover_y: float = Field(default=50, ge=0, le=100)
 
 
 class StoreSettings(BaseModel):
@@ -775,6 +778,8 @@ class PublicCategory(BaseModel):
     id: str
     name: str
     cover_url: str = ""
+    cover_x: float = 50
+    cover_y: float = 50
 
 
 class PublicStoreSettings(BaseModel):

@@ -7,18 +7,35 @@ type Pos = { x: number; y: number };
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
+type Preview = { label: string; aspect: number; width: number };
+
+// Padrão (catálogo): quadro quadrado + pré-visualização da grade e da loja.
+const DEFAULT_PREVIEWS: Preview[] = [
+  { label: "Grade (quadrado)", aspect: 1, width: 96 },
+  { label: "Loja (retrato)", aspect: 4 / 5, width: 80 },
+];
+
 export function PhotoFramer({
   url,
   initial,
   saving,
   onCancel,
   onSave,
+  aspect = 1,
+  title = "Enquadrar foto na grade",
+  hint = "Arraste a foto dentro do quadrado para escolher a parte que aparece no catálogo.",
+  previews = DEFAULT_PREVIEWS,
 }: {
   url: string;
   initial: Pos;
   saving: boolean;
   onCancel: () => void;
   onSave: (pos: Pos) => void;
+  /** Proporção (largura / altura) do quadro de edição. Padrão: quadrado. */
+  aspect?: number;
+  title?: string;
+  hint?: string;
+  previews?: Preview[];
 }) {
   useOverlayHistory(true, onCancel);
   const [pos, setPos] = useState<Pos>(initial);
@@ -57,8 +74,8 @@ export function PhotoFramer({
   }
 
   const objectPosition = `${pos.x}% ${pos.y}%`;
-  // The frame is square, so a photo can only be repositioned if it isn't one.
-  const movable = natural ? Math.abs(natural.w - natural.h) / Math.max(natural.w, natural.h) > 0.01 : true;
+  // A foto só pode ser reposicionada se a proporção dela for diferente da do quadro.
+  const movable = natural ? Math.abs(natural.w / natural.h - aspect) / aspect > 0.01 : true;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 p-4" onClick={onCancel}>
@@ -70,10 +87,8 @@ export function PhotoFramer({
         className="max-h-[95vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-5"
       >
         <div>
-          <h2 className="font-medium">Enquadrar foto na grade</h2>
-          <p className="text-xs text-neutral-500">
-            Arraste a foto dentro do quadrado para escolher a parte que aparece no catálogo.
-          </p>
+          <h2 className="font-medium">{title}</h2>
+          <p className="text-xs text-neutral-500">{hint}</p>
         </div>
 
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
@@ -83,7 +98,8 @@ export function PhotoFramer({
             onPointerMove={onPointerMove}
             onPointerUp={() => (drag.current = null)}
             onPointerCancel={() => (drag.current = null)}
-            className={`relative aspect-square w-full max-w-[320px] touch-none select-none overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 ${
+            style={{ aspectRatio: String(aspect) }}
+            className={`relative w-full max-w-[320px] touch-none select-none overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 ${
               movable ? "cursor-grab active:cursor-grabbing" : ""
             }`}
           >
@@ -111,27 +127,25 @@ export function PhotoFramer({
             </div>
           </div>
 
-          <div className="flex gap-4 sm:flex-col">
-            <div className="space-y-1">
-              <p className="text-[11px] text-neutral-500">Grade (quadrado)</p>
-              <div className="h-24 w-24 overflow-hidden rounded-lg border border-neutral-800">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-full w-full object-cover" style={{ objectPosition }} />
+          <div className="flex flex-wrap gap-4 sm:flex-col">
+            {previews.map((pv) => (
+              <div key={pv.label} className="space-y-1">
+                <p className="text-[11px] text-neutral-500">{pv.label}</p>
+                <div
+                  className="overflow-hidden rounded-lg border border-neutral-800"
+                  style={{ width: pv.width, aspectRatio: String(pv.aspect) }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="h-full w-full object-cover" style={{ objectPosition }} />
+                </div>
               </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[11px] text-neutral-500">Loja (retrato)</p>
-              <div className="aspect-[4/5] w-20 overflow-hidden rounded-lg border border-neutral-800">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-full w-full object-cover" style={{ objectPosition }} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
         {!movable && (
           <p className="text-xs text-yellow-400">
-            Esta foto já é quadrada: não há o que reposicionar no quadrado.
+            Esta foto já tem a proporção do quadro: não há o que reposicionar.
           </p>
         )}
 

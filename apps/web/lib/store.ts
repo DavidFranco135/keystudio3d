@@ -1,4 +1,5 @@
-export type StoreSlide = { url: string; title: string; subtitle: string };
+// x / y: enquadramento (0-100). Sem valores = foto inteira, sem corte.
+export type StoreSlide = { url: string; title: string; subtitle: string; x?: number | null; y?: number | null };
 export type StoreHighlight = { title: string; text: string };
 // cover_url: foto principal da categoria na vitrine ("" = automática).
 // cover_x / cover_y: enquadramento da foto principal (0-100, 50 = centro).

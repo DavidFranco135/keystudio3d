@@ -89,7 +89,11 @@ export function HeroSlider({
       {/* Área da foto: tem o formato da própria foto, então nada é cortado.
           No celular o texto vem logo abaixo; do tablet pra cima, por cima. */}
       <div className="relative w-full sm:min-h-[380px]" style={{ aspectRatio: String(ratio) }}>
-      {slides.map((slide, i) => (
+      {slides.map((slide, i) => {
+        // Slide enquadrado pelo lojista: a foto preenche a capa a partir do ponto
+        // escolhido. Sem enquadramento: foto inteira, sem corte (como sempre foi).
+        const framed = slide.x != null && slide.y != null;
+        return (
         <div
           key={`${slide.url}-${i}`}
           aria-hidden={i !== index}
@@ -109,7 +113,7 @@ export function HeroSlider({
               i === index ? "animate-kenburns" : ""
             }`}
           />
-          {/* A foto em si aparece inteira, sem corte. */}
+          {/* A foto em si: inteira (sem corte) ou enquadrada, se o lojista escolheu. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imgSrc(slide.url, IMG_WIDTH.hero)}
@@ -117,10 +121,12 @@ export function HeroSlider({
             loading={i === 0 ? "eager" : "lazy"}
             ref={i === 0 ? measureFirst : undefined}
             onLoad={i === 0 ? (e) => measureFirst(e.currentTarget) : undefined}
-            className="relative h-full w-full object-contain"
+            className={`relative h-full w-full ${framed ? "object-cover" : "object-contain"}`}
+            style={framed ? { objectPosition: `${slide.x}% ${slide.y}%` } : undefined}
           />
         </div>
-      ))}
+        );
+      })}
 
       <div className="absolute inset-0 hidden bg-gradient-to-t from-black/75 via-black/25 to-black/10 sm:block" />
       <div className="absolute inset-0 hidden bg-gradient-to-r from-black/35 via-transparent to-transparent sm:block" />

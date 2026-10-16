@@ -699,6 +699,9 @@ class StoreSlide(BaseModel):
     url: str = Field(max_length=2000)
     title: str = Field(default="", max_length=120)
     subtitle: str = Field(default="", max_length=240)
+    # Enquadramento da foto (0-100). Sem valores = foto inteira, sem corte (padrão).
+    x: float | None = Field(default=None, ge=0, le=100)
+    y: float | None = Field(default=None, ge=0, le=100)
 
 
 class StoreHighlight(BaseModel):

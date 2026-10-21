@@ -167,10 +167,10 @@ def test_categories_are_saved_and_exposed_publicly(client: TestClient):
 
 def test_product_and_featured_order_are_respected_publicly(client: TestClient):
     org_id, slug, headers = _setup(client)
-    a = _product(client, org_id, headers, name="A")
-    b = _product(client, org_id, headers, name="B")
-    c = _product(client, org_id, headers, name="C")
-    d = _product(client, org_id, headers, name="D")
+    a = _product(client, org_id, headers, name="Prod A")
+    b = _product(client, org_id, headers, name="Prod B")
+    c = _product(client, org_id, headers, name="Prod C")
+    d = _product(client, org_id, headers, name="Prod D")
 
     response = client.put(
         f"/api/v1/organizations/{org_id}/store",
@@ -185,9 +185,28 @@ def test_product_and_featured_order_are_respected_publicly(client: TestClient):
 
     body = client.get(f"/api/v1/public/stores/{slug}").json()
     # C, A na ordem escolhida; D (fora da lista) vai para o fim.
-    assert [p["name"] for p in body["products"]] == ["C", "A", "D"]
+    assert [p["name"] for p in body["products"]] == ["Prod C", "Prod A", "Prod D"]
     # Destaques na ordem escolhida, sem o produto oculto.
     assert body["settings"]["featured_product_ids"] == [d["id"], c["id"], a["id"]]
+
+
+def test_product_created_without_publish_stays_hidden_until_published(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    _product(client, org_id, headers, name="Publicado")
+    draft = _product(client, org_id, headers, name="Peça da precificação", publish_in_store=False)
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    assert [p["name"] for p in body["products"]] == ["Publicado"]
+
+    # Lojista publica manualmente: tira o produto da lista de ocultos.
+    settings = client.get(f"/api/v1/organizations/{org_id}/store", headers=headers).json()["settings"]
+    assert settings["hidden_product_ids"] == [draft["id"]]
+    settings["hidden_product_ids"] = []
+    response = client.put(f"/api/v1/organizations/{org_id}/store", json=settings, headers=headers)
+    assert response.status_code == 200, response.text
+
+    body = client.get(f"/api/v1/public/stores/{slug}").json()
+    assert sorted(p["name"] for p in body["products"]) == ["Peça da precificação", "Publicado"]
 
 
 def test_price_on_request_hides_the_price_publicly(client: TestClient):

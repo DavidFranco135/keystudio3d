@@ -413,9 +413,12 @@ export default function PrecificacaoPage() {
               // recalculado só com a receita e saía bem mais barato.
               manual_price: Number((saved.final_price ?? saved.suggested_price).toFixed(2)),
               materials: materialId ? [{ material_id: materialId, quantity_g: weightGNum }] : [],
+              // Não vai sozinho para a loja pública: você publica em Minha Loja.
+              publish_in_store: false,
             }),
           });
-          productMessage = "Peça salva na lista e adicionada aos Produtos.";
+          productMessage =
+            "Peça salva na lista e adicionada aos Produtos (oculta na loja). Para publicar, use Minha Loja → Produtos na loja → Mostrar.";
         } catch {
           productMessage = "Peça salva na lista, mas falhou ao adicionar aos Produtos — adicione manualmente na aba Produtos se precisar.";
         }
@@ -499,10 +502,14 @@ export default function PrecificacaoPage() {
           machine_id: null,
           manual_price: Number((q.final_price ?? q.suggested_price).toFixed(2)),
           materials: [],
+          // Não vai sozinho para a loja pública: você publica em Minha Loja.
+          publish_in_store: false,
         }),
       });
       setAddedToProductsIds((prev) => [...prev, q.id]);
-      setMessage(`"${q.piece_name}" adicionado aos Produtos.`);
+      setMessage(
+        `"${q.piece_name}" adicionado aos Produtos (oculto na loja). Para publicar, use Minha Loja → Produtos na loja → Mostrar.`
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao adicionar aos produtos.");
     }

@@ -439,6 +439,9 @@ class CreateProductRequest(BaseModel):
     photo_urls: list[str] = Field(default_factory=list)
     stock_quantity: int | None = Field(default=None, ge=0)
     materials: list[ProductMaterialInput] = Field(default_factory=list)
+    # False = o produto nasce oculto na loja pública e só aparece quando o
+    # lojista o publica manualmente (Minha Loja → Produtos na loja → Mostrar).
+    publish_in_store: bool = True
 
 
 class UpdateProductRequest(BaseModel):

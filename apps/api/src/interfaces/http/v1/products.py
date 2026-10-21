@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from src.application.products import use_cases as product_use_cases
+from src.application.store import use_cases as store_use_cases
 from src.domain.auth.roles import Role
 from src.domain.shared.exceptions import DomainError
 from src.interfaces.http.dependencies import get_db, require_org_role
@@ -66,6 +67,11 @@ def create_product(
         )
     except DomainError as exc:
         raise as_http_exception(exc) from exc
+    if not payload.publish_in_store:
+        # Peças vindas da precificação não vão sozinhas para a loja pública.
+        store_use_cases.hide_product_in_store(
+            db, organization_id=organization_id, product_id=product.id
+        )
     return _to_response(db, product)
 
 

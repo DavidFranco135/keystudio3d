@@ -52,6 +52,21 @@ def save_store_settings(
     return StoreAdminResponse(slug=org.slug, name=org.name, settings=settings)
 
 
+def hide_product_in_store(db: Session, *, organization_id: UUID, product_id: UUID) -> None:
+    """Deixa o produto oculto na vitrine pública (o lojista publica depois, à mão)."""
+    org = OrganizationRepository(db).get_by_id(organization_id)
+    if org is None:
+        raise OrganizationNotFoundError(str(organization_id))
+    settings = _load_settings(org.settings)
+    pid = str(product_id)
+    if pid in settings.hidden_product_ids:
+        return
+    settings.hidden_product_ids = [*settings.hidden_product_ids, pid]
+    org.settings = {**(org.settings or {}), "store": settings.model_dump()}
+    db.commit()
+    _public_cache.pop(org.slug, None)
+
+
 def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     cached = _public_cache.get(slug)
     if cached is not None and time.monotonic() - cached[0] < _PUBLIC_CACHE_TTL_SECONDS:

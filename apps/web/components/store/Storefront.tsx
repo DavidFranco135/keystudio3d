@@ -7,6 +7,7 @@ import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from
 import { formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
+import { trackStoreEvent, useVisitTracker } from "@/lib/visits";
 import { CartDrawer, type CustomerInfo } from "./CartDrawer";
 import { FeaturedSlider } from "./FeaturedSlider";
 import { SearchOverlay } from "./SearchOverlay";
@@ -185,6 +186,8 @@ async function loadPublicStore(slug: string): Promise<PublicStore> {
 }
 
 export function Storefront({ slug }: { slug: string }) {
+  // Conta a visita e o "online agora" (anônimo, sem IP) — aparece em Minha Loja.
+  useVisitTracker(slug);
   const [store, setStore] = useState<PublicStore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
@@ -198,6 +201,10 @@ export function Storefront({ slug }: { slug: string }) {
   });
   const [cartOpen, setCartOpen] = useState(false);
   const [openProductId, setOpenProductId] = useState<string | null>(null);
+  // Conta a abertura do produto (alimenta "Produtos mais vistos" em Minha Loja).
+  useEffect(() => {
+    if (openProductId) trackStoreEvent(slug, "product_view", openProductId);
+  }, [slug, openProductId]);
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"relevance" | "price-asc" | "price-desc" | "name">("relevance");
@@ -902,6 +909,7 @@ export function Storefront({ slug }: { slug: string }) {
                     const text = `Olá, ${storeName}! ${question.text.trim()}${
                       question.name.trim() ? `\n\n— ${question.name.trim()}` : ""
                     }`;
+                    trackStoreEvent(slug, "whatsapp_click");
                     window.open(whatsappLink(settings.whatsapp, text), "_blank", "noopener,noreferrer");
                   }}
                   className="space-y-4 rounded-3xl border border-[var(--line)] bg-[var(--surface)] p-6 sm:p-8"

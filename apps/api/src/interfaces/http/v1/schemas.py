@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
@@ -778,6 +779,55 @@ class PublicProduct(BaseModel):
     category_ids: list[str] = Field(default_factory=list)
     # Quando True, `price` vem 0 — o valor real não é exposto publicamente.
     price_on_request: bool = False
+
+
+class StorePing(BaseModel):
+    """Sinal de vida de um visitante da vitrine (anônimo)."""
+
+    visitor_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    # True na primeira abertura da loja numa sessão: conta como uma visita.
+    new_visit: bool = False
+
+
+class StoreEvent(BaseModel):
+    """Ação de um visitante na vitrine (anônima)."""
+
+    kind: Literal["product_view", "whatsapp_click"]
+    product_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+
+
+class StoreVisitTotals(BaseModel):
+    views: int
+    # Pessoas diferentes por dia, somadas (quem volta em outro dia conta de novo).
+    unique: int
+    whatsapp: int = 0
+
+
+class StoreVisitDay(BaseModel):
+    date: str
+    views: int
+    unique: int
+    whatsapp: int = 0
+
+
+class StoreTopProduct(BaseModel):
+    product_id: str
+    name: str
+    views: int  # últimos 30 dias
+    views7: int  # últimos 7 dias
+
+
+class StoreOnlineResponse(BaseModel):
+    online: int
+
+
+class StoreAnalyticsResponse(BaseModel):
+    online: int
+    today: StoreVisitTotals
+    last7: StoreVisitTotals
+    last30: StoreVisitTotals
+    days: list[StoreVisitDay]
+    top_products: list[StoreTopProduct] = Field(default_factory=list)
 
 
 class PublicCategory(BaseModel):

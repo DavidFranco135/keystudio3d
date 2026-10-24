@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from google.cloud.firestore import Client
+from google.cloud.firestore import Client, Increment
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from src.infrastructure.firestore.entities import (
@@ -1539,3 +1539,119 @@ class BillingEventRepository:
         event.status = "processed"
         event.processed_at = datetime.now(UTC)
         self.session.flush()
+
+
+
+class StoreVisitRepository:
+    """Contador de visitas e presença da vitrine pública.
+
+    Layout: organizations/{org}/store_visitors/{visitor_id} (presença) e
+    organizations/{org}/store_visit_days/{AAAA-MM-DD} (contadores do dia, com
+    Increment — seguro mesmo com várias visitas simultâneas).
+    """
+
+    def __init__(self, session: FirestoreSession) -> None:
+        self.session = session
+        self.client = session.client
+
+    def _org(self, organization_id: UUID):
+        return self.client.collection("organizations").document(str(organization_id))
+
+    def _visitors(self, organization_id: UUID):
+        return self._org(organization_id).collection("store_visitors")
+
+    def _days(self, organization_id: UUID):
+        return self._org(organization_id).collection("store_visit_days")
+
+    def mark_seen(self, organization_id: UUID, visitor_id: str, *, now: datetime) -> None:
+        self._visitors(organization_id).document(visitor_id).set({"seen_at": now}, merge=True)
+
+    def record_visit(
+        self, organization_id: UUID, visitor_id: str, *, now: datetime, day: str
+    ) -> None:
+        ref = self._visitors(organization_id).document(visitor_id)
+        snap = ref.get()
+        last_day = (snap.to_dict() or {}).get("last_day") if snap.exists else None
+        unique = last_day != day
+        ref.set({"seen_at": now, "last_day": day}, merge=True)
+        self._days(organization_id).document(day).set(
+            {
+                "date": day,
+                "views": Increment(1),
+                "unique_visitors": Increment(1 if unique else 0),
+            },
+            merge=True,
+        )
+
+    def online_count(self, organization_id: UUID, *, since: datetime) -> int:
+        query = self._visitors(organization_id).where(filter=FieldFilter("seen_at", ">=", since))
+        result = query.count().get()
+        return int(result[0][0].value)
+
+    def _product_days(self, organization_id: UUID):
+        return self._org(organization_id).collection("store_product_days")
+
+    def add_whatsapp_click(self, organization_id: UUID, *, day: str) -> None:
+        self._days(organization_id).document(day).set(
+            {"date": day, "whatsapp_clicks": Increment(1)}, merge=True
+        )
+
+    def add_product_view(self, organization_id: UUID, *, day: str, product_id: str) -> None:
+        self._product_days(organization_id).document(f"{day}_{product_id}").set(
+            {"date": day, "product_id": product_id, "views": Increment(1)}, merge=True
+        )
+
+    def list_days(
+        self, organization_id: UUID, *, from_day: str, to_day: str
+    ) -> list[tuple[str, int, int, int]]:
+        """(dia, visitas, visitantes únicos, cliques no WhatsApp)."""
+        snaps = (
+            self._days(organization_id)
+            .where(filter=FieldFilter("date", ">=", from_day))
+            .where(filter=FieldFilter("date", "<=", to_day))
+            .stream()
+        )
+        rows = []
+        for snap in snaps:
+            data = snap.to_dict() or {}
+            rows.append(
+                (
+                    str(data.get("date") or snap.id),
+                    int(data.get("views") or 0),
+                    int(data.get("unique_visitors") or 0),
+                    int(data.get("whatsapp_clicks") or 0),
+                )
+            )
+        return rows
+
+    def list_product_days(
+        self, organization_id: UUID, *, from_day: str, to_day: str
+    ) -> list[tuple[str, str, int]]:
+        """(dia, id do produto, aberturas)."""
+        snaps = (
+            self._product_days(organization_id)
+            .where(filter=FieldFilter("date", ">=", from_day))
+            .where(filter=FieldFilter("date", "<=", to_day))
+            .stream()
+        )
+        rows = []
+        for snap in snaps:
+            data = snap.to_dict() or {}
+            rows.append(
+                (
+                    str(data.get("date") or ""),
+                    str(data.get("product_id") or ""),
+                    int(data.get("views") or 0),
+                )
+            )
+        return rows
+
+    def prune_visitors(self, organization_id: UUID, *, before: datetime) -> None:
+        old = (
+            self._visitors(organization_id)
+            .where(filter=FieldFilter("seen_at", "<", before))
+            .limit(200)
+            .stream()
+        )
+        for snap in old:
+            snap.reference.delete()

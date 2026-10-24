@@ -22,6 +22,7 @@ import { matchesSearch } from "@/lib/search";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import { focusFor, focusStyle } from "@/lib/focus";
 import { PhotoFramer } from "@/components/PhotoFramer";
+import { VisitStats } from "@/components/store/VisitStats";
 
 const EMPTY: StoreSettings = {
   display_name: "",
@@ -444,10 +445,14 @@ export default function LojaAdminPage() {
       // Uma API antiga (ainda não republicada) ignora em silêncio os campos
       // novos: a foto da categoria e a ordem não seriam gravadas. Avisa.
       const savedAny = saved.settings as Partial<StoreSettings>;
+      const savedCats = (savedAny.categories ?? []) as Array<{ cover_url?: string; cover_x?: number }>;
+      const savedSlides = (savedAny.slides ?? []) as Array<{ x?: number | null }>;
       const apiIsOld =
         (body.product_order.length > 0 && savedAny.product_order === undefined) ||
-        (body.categories.some((c) => c.cover_url) &&
-          (savedAny.categories ?? []).some((c) => (c as { cover_url?: string }).cover_url === undefined));
+        // Categorias: a API nova sempre devolve cover_url e cover_x.
+        (body.categories.length > 0 && savedCats.some((c) => c.cover_url === undefined || c.cover_x === undefined)) ||
+        // Slides: a API nova sempre devolve a chave "x" (null quando sem enquadramento).
+        (body.slides.length > 0 && savedSlides.some((s) => s.x === undefined));
       setSettings({ ...EMPTY, ...saved.settings });
       setDirty(false);
       clearDraft(draftKey);
@@ -455,7 +460,7 @@ export default function LojaAdminPage() {
       refreshPublicStoreCache(saved.slug);
       if (apiIsOld) {
         setError(
-          "Salvo, mas a API publicada ainda é a versão antiga: a ordem dos produtos e a foto das categorias NÃO foram gravadas. Republique a API (firebase deploy --only functions) e salve de novo."
+          "Salvo, mas a API publicada ainda é a versão antiga: a ordem dos produtos, a foto/enquadramento das categorias e o enquadramento dos slides NÃO foram gravados. Republique a API (firebase deploy --only functions) e salve de novo."
         );
         setMessage(null);
       } else {
@@ -496,6 +501,9 @@ export default function LojaAdminPage() {
           <p className="text-neutral-500">Carregando…</p>
         ) : (
           <>
+            {accessToken && currentOrganizationId && (
+              <VisitStats orgPath={orgPath} accessToken={accessToken} />
+            )}
             <Card title="Link da loja pública" hint="Compartilhe com seus clientes. Não precisa de login.">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input readOnly value={publicUrl} className={`${input} sm:flex-1`} />

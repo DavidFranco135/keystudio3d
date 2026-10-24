@@ -620,3 +620,48 @@ class BillingEvent(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class StoreVisitDay(Base):
+    """Contador diário de visitas da vitrine pública (um registro por dia, no
+    fuso de Brasília). `day` é "AAAA-MM-DD"."""
+
+    __tablename__ = "store_visit_days"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id"), primary_key=True
+    )
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unique_visitors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    whatsapp_clicks: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class StoreProductDay(Base):
+    """Quantas vezes cada produto foi aberto na vitrine, por dia."""
+
+    __tablename__ = "store_product_days"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id"), primary_key=True
+    )
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    product_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class StoreVisitor(Base):
+    """Presença de um visitante anônimo (id aleatório do navegador, sem IP).
+
+    `seen_at` é o último sinal de vida — "online agora" = visto há poucos
+    segundos. `last_day` evita contar a mesma pessoa duas vezes no mesmo dia.
+    """
+
+    __tablename__ = "store_visitors"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("organizations.id"), primary_key=True
+    )
+    visitor_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    last_day: Mapped[str | None] = mapped_column(String(10), nullable=True)

@@ -18,6 +18,9 @@ from src.infrastructure.db.models import (
     OrderItem,
     Organization,
     OrgMember,
+    StoreProductDay,
+    StoreVisitDay,
+    StoreVisitor,
     Plan,
     PlanEntitlement,
     Product,
@@ -1330,3 +1333,138 @@ class BillingEventRepository:
         event.error_message = error_message
         event.processed_at = datetime.now(UTC)
         self.session.flush()
+
+
+
+class StoreVisitRepository:
+    """Contador de visitas e presença da vitrine pública."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def mark_seen(self, organization_id: UUID, visitor_id: str, *, now: datetime) -> None:
+        visitor = self.session.get(StoreVisitor, (organization_id, visitor_id))
+        if visitor is None:
+            self.session.add(
+                StoreVisitor(organization_id=organization_id, visitor_id=visitor_id, seen_at=now)
+            )
+        else:
+            visitor.seen_at = now
+        self.session.commit()
+
+    def record_visit(
+        self, organization_id: UUID, visitor_id: str, *, now: datetime, day: str
+    ) -> None:
+        visitor = self.session.get(StoreVisitor, (organization_id, visitor_id))
+        unique = visitor is None or visitor.last_day != day
+        if visitor is None:
+            self.session.add(
+                StoreVisitor(
+                    organization_id=organization_id,
+                    visitor_id=visitor_id,
+                    seen_at=now,
+                    last_day=day,
+                )
+            )
+        else:
+            visitor.seen_at = now
+            visitor.last_day = day
+        row = self.session.get(StoreVisitDay, (organization_id, day))
+        if row is None:
+            self.session.add(
+                StoreVisitDay(
+                    organization_id=organization_id,
+                    day=day,
+                    views=1,
+                    unique_visitors=1 if unique else 0,
+                )
+            )
+        else:
+            row.views += 1
+            if unique:
+                row.unique_visitors += 1
+        self.session.commit()
+
+    def online_count(self, organization_id: UUID, *, since: datetime) -> int:
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(StoreVisitor)
+                .where(
+                    StoreVisitor.organization_id == organization_id,
+                    StoreVisitor.seen_at >= since,
+                )
+            )
+            or 0
+        )
+
+    def add_whatsapp_click(self, organization_id: UUID, *, day: str) -> None:
+        row = self.session.get(StoreVisitDay, (organization_id, day))
+        if row is None:
+            self.session.add(
+                StoreVisitDay(
+                    organization_id=organization_id,
+                    day=day,
+                    views=0,
+                    unique_visitors=0,
+                    whatsapp_clicks=1,
+                )
+            )
+        else:
+            row.whatsapp_clicks += 1
+        self.session.commit()
+
+    def add_product_view(self, organization_id: UUID, *, day: str, product_id: str) -> None:
+        row = self.session.get(StoreProductDay, (organization_id, day, product_id))
+        if row is None:
+            self.session.add(
+                StoreProductDay(
+                    organization_id=organization_id, day=day, product_id=product_id, views=1
+                )
+            )
+        else:
+            row.views += 1
+        self.session.commit()
+
+    def list_days(
+        self, organization_id: UUID, *, from_day: str, to_day: str
+    ) -> list[tuple[str, int, int, int]]:
+        """(dia, visitas, visitantes únicos, cliques no WhatsApp)."""
+        rows = self.session.execute(
+            select(
+                StoreVisitDay.day,
+                StoreVisitDay.views,
+                StoreVisitDay.unique_visitors,
+                StoreVisitDay.whatsapp_clicks,
+            ).where(
+                StoreVisitDay.organization_id == organization_id,
+                StoreVisitDay.day >= from_day,
+                StoreVisitDay.day <= to_day,
+            )
+        ).all()
+        return [(day, int(v), int(u), int(w)) for day, v, u, w in rows]
+
+    def list_product_days(
+        self, organization_id: UUID, *, from_day: str, to_day: str
+    ) -> list[tuple[str, str, int]]:
+        """(dia, id do produto, aberturas)."""
+        rows = self.session.execute(
+            select(StoreProductDay.day, StoreProductDay.product_id, StoreProductDay.views).where(
+                StoreProductDay.organization_id == organization_id,
+                StoreProductDay.day >= from_day,
+                StoreProductDay.day <= to_day,
+            )
+        ).all()
+        return [(day, pid, int(v)) for day, pid, v in rows]
+
+    def prune_visitors(self, organization_id: UUID, *, before: datetime) -> None:
+        old = self.session.scalars(
+            select(StoreVisitor).where(
+                StoreVisitor.organization_id == organization_id,
+                StoreVisitor.seen_at < before,
+            )
+        ).all()
+        for visitor in old:
+            self.session.delete(visitor)
+        if old:
+            self.session.commit()

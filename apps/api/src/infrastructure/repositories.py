@@ -41,6 +41,7 @@ if _settings.db_backend == "firestore":
         ProjectVersionRepository,
         QuoteRepository,
         RefreshTokenRepository,
+        StoreVisitRepository,
         SubscriptionRepository,
         UserRepository,
     )
@@ -67,6 +68,7 @@ else:
         ProjectVersionRepository,
         QuoteRepository,
         RefreshTokenRepository,
+        StoreVisitRepository,
         SubscriptionRepository,
         UserRepository,
     )
@@ -93,6 +95,7 @@ __all__ = [
     "ProjectVersionRepository",
     "QuoteRepository",
     "RefreshTokenRepository",
+    "StoreVisitRepository",
     "SubscriptionRepository",
     "UserRepository",
 ]

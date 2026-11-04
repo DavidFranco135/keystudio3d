@@ -22,6 +22,7 @@ import { AppShell } from "@/components/AppShell";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { ProductPicker } from "@/components/ProductPicker";
 import { STATUS_LABELS, STATUS_TONE } from "@/lib/order-status";
+import { OrderPdfDialog } from "@/components/OrderPdfDialog";
 
 function nextStatus(current: string): string | null {
   const idx = ORDER_STATUSES.indexOf(current as (typeof ORDER_STATUSES)[number]);
@@ -261,6 +262,7 @@ export default function PedidosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [pdfOrderId, setPdfOrderId] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState("");
   const [notes, setNotes] = useState("");
@@ -930,6 +932,9 @@ export default function PedidosPage() {
                     <button onClick={() => startEditOrder(order)} className="text-blue-400 hover:underline">
                       Editar
                     </button>
+                    <button onClick={() => setPdfOrderId(order.id)} className="text-amber-400 hover:underline">
+                      Gerar PDF
+                    </button>
                     <button onClick={() => handleDeleteOrder(order)} className="text-red-400 hover:underline">
                       Excluir
                     </button>
@@ -1121,6 +1126,22 @@ export default function PedidosPage() {
           )}
         </div>
       </div>
+      {pdfOrderId && accessToken && currentOrganizationId && (() => {
+        const pdfOrder = orders.find((o) => o.id === pdfOrderId);
+        if (!pdfOrder) return null;
+        return (
+          <OrderPdfDialog
+            order={pdfOrder}
+            customer={customers.find((c) => c.id === pdfOrder.customer_id) ?? null}
+            items={itemsByOrder[pdfOrder.id]}
+            products={products}
+            orgPath={orgPath}
+            orgId={currentOrganizationId}
+            accessToken={accessToken}
+            onClose={() => setPdfOrderId(null)}
+          />
+        );
+      })()}
     </AppShell>
   );
 }

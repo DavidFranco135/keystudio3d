@@ -23,8 +23,16 @@ export type PaymentInfo = {
   shipping: number;
   // Validade do orçamento, em dias (só aparece quando o pedido é orçamento).
   validityDays: number;
-  // Texto livre: chave PIX, dados bancários, condições combinadas…
+  // Texto livre: condições combinadas, instruções extras…
   details: string;
+  // Prazo para pagamento em dias após a emissão (0 = sem prazo / na aprovação).
+  termDays: number;
+  // A/C: comprador ou setor responsável na empresa cliente.
+  attention: string;
+  // Nº do pedido de compra (PO) enviado pela empresa cliente.
+  purchaseOrder: string;
+  // Texto do frete quando não há valor: "Incluso", "Por conta do cliente"…
+  shippingNote: string;
 };
 
 export const DEFAULT_PAYMENT: PaymentInfo = {
@@ -35,6 +43,35 @@ export const DEFAULT_PAYMENT: PaymentInfo = {
   shipping: 0,
   validityDays: 7,
   details: "",
+  termDays: 0,
+  attention: "",
+  purchaseOrder: "",
+  shippingNote: "A combinar",
+};
+
+// Dados de quem vende (fornecedor) e para onde a empresa paga.
+export type SupplierInfo = {
+  name: string;
+  document: string; // CPF ou CNPJ
+  email: string;
+  phone: string;
+  address: string;
+  bank: string;
+  agency: string;
+  account: string;
+  pixKey: string;
+};
+
+export const EMPTY_SUPPLIER: SupplierInfo = {
+  name: "",
+  document: "",
+  email: "",
+  phone: "",
+  address: "",
+  bank: "",
+  agency: "",
+  account: "",
+  pixKey: "",
 };
 
 export type CompanyInfo = {
@@ -44,6 +81,11 @@ export type CompanyInfo = {
   address?: string;
   hours?: string;
 };
+
+function docLabelFor(doc: string): string {
+  const d = doc.replace(/\D/g, "");
+  return d.length === 14 ? "CNPJ" : d.length === 11 ? "CPF" : "CPF / CNPJ";
+}
 
 type Rgb = [number, number, number];
 const INK: Rgb = [28, 25, 23];
@@ -145,6 +187,7 @@ export type OrderPdfInput = {
   items: OrderItem[];
   products: Product[];
   company: CompanyInfo;
+  supplier: SupplierInfo;
   payment: PaymentInfo;
 };
 
@@ -161,6 +204,14 @@ export function pdfFileName(order: Order, customer: Customer | null): string {
 
 export async function buildOrderPdf(input: OrderPdfInput) {
   const { order, customer, items, products, company, payment } = input;
+  const sup = input.supplier;
+  // Nome de quem vende: o do fornecedor, senão o da loja.
+  const sellerName = sup.name.trim() || company.name;
+  const sellerPhone = sup.phone.trim() || company.whatsapp || "";
+  const sellerAddress = sup.address.trim() || company.address || "";
+  const sellerDoc = sup.document.trim()
+    ? `${docLabelFor(sup.document)} ${formatDocument(sup.document)}`
+    : "";
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
@@ -185,7 +236,7 @@ export async function buildOrderPdf(input: OrderPdfInput) {
   });
 
   // ---------- Cabeçalho (faixa preta da marca) ----------
-  const HEADER_H = 38;
+  const HEADER_H = 42;
   const logo = await loadImage("/brand/keystudio3d-logo-pdf.jpg");
   const drawHeader = (compact: boolean) => {
     const h = compact ? 22 : HEADER_H;
@@ -219,26 +270,26 @@ export async function buildOrderPdf(input: OrderPdfInput) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(17);
     setText(COPPER);
-    doc.text(title, rx, 15, { align: "right" });
+    doc.text(title, rx, 13.5, { align: "right" });
     doc.setFontSize(10);
     setText([255, 255, 255]);
-    doc.text(`Nº ${number}`, rx, 21.5, { align: "right" });
+    doc.text(`Nº ${number}  •  Emissão ${now.toLocaleDateString("pt-BR")}`, rx, 19.5, { align: "right" });
+    const contact: string[] = [];
+    if (sup.email.trim()) contact.push(sup.email.trim());
+    if (sellerPhone) contact.push(`WhatsApp ${formatPhone(sellerPhone)}`);
+    if (!sup.email.trim() && company.instagram) contact.push(`@${company.instagram.replace(/^@/, "")}`);
+    let y = 26;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.2);
+    setText([235, 225, 216]);
+    doc.text([sellerName, sellerDoc].filter(Boolean).join("  •  "), rx, y, { align: "right" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     setText([200, 190, 182]);
-    const contact: string[] = [];
-    if (company.whatsapp) contact.push(`WhatsApp ${formatPhone(company.whatsapp)}`);
-    if (company.instagram) contact.push(`@${company.instagram.replace(/^@/, "")}`);
-    const lines = [
-      `Emissão: ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
-      contact.join("  •  "),
-      company.address ?? "",
-    ].filter(Boolean);
-    let y = 28;
-    for (const line of lines) {
-      const wrapped = doc.splitTextToSize(line, 100) as string[];
-      doc.text(wrapped[0], rx, y, { align: "right" });
+    for (const line of [contact.join("  •  "), sellerAddress].filter(Boolean)) {
       y += 4.2;
+      const wrapped = doc.splitTextToSize(line, 110) as string[];
+      doc.text(wrapped[0], rx, y, { align: "right" });
     }
   };
   drawHeader(false);
@@ -325,6 +376,12 @@ export async function buildOrderPdf(input: OrderPdfInput) {
   ];
   if (isQuote && order.due_date) {
     orderFields.push({ label: "Previsão de entrega", value: dateBR(order.due_date.slice(0, 10)) });
+  }
+  if (payment.attention.trim()) {
+    orderFields.push({ label: "A/C (aos cuidados de)", value: payment.attention.trim(), span: 2 });
+  }
+  if (payment.purchaseOrder.trim()) {
+    orderFields.push({ label: "Pedido de compra", value: payment.purchaseOrder.trim() });
   }
   const notes = (order.notes ?? "").trim();
   if (notes) orderFields.push({ label: "Observações", value: notes, span: 4, plain: true });
@@ -430,21 +487,68 @@ export async function buildOrderPdf(input: OrderPdfInput) {
 
   const lastY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   y = lastY + 5;
-  const blockH = 48;
-  if (y + blockH > H - 28) {
+
+  // Monta o conteúdo do quadro de pagamento antes, para saber a altura.
+  const tw = 78;
+  const tx = W - M - tw;
+  const pw = CW - tw - 6;
+  const px = M;
+  const payLines: [string, string][] = [["Forma de pagamento", payment.method || "A combinar"]];
+  const n = Math.max(1, Math.floor(payment.installments || 1));
+  const down = Math.min(100, Math.max(0, payment.downPaymentPercent || 0));
+  const term = Math.max(0, Math.floor(payment.termDays || 0));
+  if (down > 0 && down < 100) {
+    const downValue = (total * down) / 100;
+    const rest = total - downValue;
+    payLines.push(["Entrada", `${down}% — ${brl(downValue)}`]);
+    payLines.push(["Restante", n > 1 ? `${n}x de ${brl(rest / n)}` : `${brl(rest)} na entrega`]);
+  } else {
+    payLines.push(["Condição", n > 1 ? `${n}x de ${brl(total / n)}` : term > 0 ? "Faturado" : "À vista"]);
+  }
+  if (term > 0) {
+    payLines.push(["Prazo / vencimento", `${term} dias — vence em ${addDays(now, term)}`]);
+  }
+  // Dados para a empresa efetuar o pagamento.
+  const bankLines: [string, string][] = [];
+  if (sup.name.trim() || sup.document.trim()) {
+    bankLines.push(["Favorecido", [sup.name.trim(), sellerDoc].filter(Boolean).join(" — ")]);
+  }
+  const bankParts = [
+    sup.bank.trim() ? `Banco ${sup.bank.trim()}` : "",
+    sup.agency.trim() ? `Ag. ${sup.agency.trim()}` : "",
+    sup.account.trim() ? `Conta ${sup.account.trim()}` : "",
+  ].filter(Boolean);
+  if (bankParts.length) bankLines.push(["Dados bancários", bankParts.join("  •  ")]);
+  if (sup.pixKey.trim()) bankLines.push(["Chave PIX", sup.pixKey.trim()]);
+  doc.setFontSize(8.5);
+  const detailLines = payment.details.trim()
+    ? (doc.splitTextToSize(payment.details.trim(), pw - 8) as string[])
+    : [];
+  const valueLines = (v: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    return doc.splitTextToSize(v, pw - 8) as string[];
+  };
+  const rowsH = (rows: [string, string][]) => rows.reduce((h, [, v]) => h + 4.4 + valueLines(v).length * 4.2, 0);
+  const payH =
+    8 +
+    rowsH(payLines) +
+    (bankLines.length ? 6 + rowsH(bankLines) : 0) +
+    (detailLines.length ? 2 + detailLines.length * 3.9 : 0) +
+    2;
+  const blockH = Math.max(48, payH + 4);
+  if (y + blockH > H - 20) {
     doc.addPage();
     drawHeader(true);
     y = 32;
   }
 
   // Totais (direita)
-  const tw = 78;
-  const tx = W - M - tw;
   const totalRows: [string, string][] = [
     [`Subtotal (${qtyTotal} ${qtyTotal === 1 ? "unidade" : "unidades"})`, brl(subtotal)],
   ];
   if (discount > 0) totalRows.push(["Desconto", `- ${brl(discount)}`]);
-  totalRows.push(["Frete / entrega", shipping > 0 ? brl(shipping) : "A combinar / grátis"]);
+  totalRows.push(["Frete / entrega", shipping > 0 ? brl(shipping) : payment.shippingNote || "A combinar"]);
   let ty = y + 2;
   doc.setFontSize(9);
   for (const [label, value] of totalRows) {
@@ -470,49 +574,42 @@ export async function buildOrderPdf(input: OrderPdfInput) {
   doc.text(brl(total), W - M - 4, ty + 8.8, { align: "right" });
   const totalsBottom = ty + 13;
 
-  // Forma de pagamento (esquerda)
-  const pw = CW - tw - 6;
-  const px = M;
-  const payLines: [string, string][] = [["Forma de pagamento", payment.method || "A combinar"]];
-  const n = Math.max(1, Math.floor(payment.installments || 1));
-  const down = Math.min(100, Math.max(0, payment.downPaymentPercent || 0));
-  if (down > 0 && down < 100) {
-    const downValue = (total * down) / 100;
-    const rest = total - downValue;
-    payLines.push(["Entrada", `${down}% — ${brl(downValue)}`]);
-    payLines.push([
-      "Restante",
-      n > 1 ? `${n}x de ${brl(rest / n)}` : `${brl(rest)} na entrega`,
-    ]);
-  } else {
-    payLines.push(["Condição", n > 1 ? `${n}x de ${brl(total / n)}` : "À vista"]);
-  }
+  // Pagamento (esquerda)
   let py = y + 2;
-  const detailLines = payment.details.trim()
-    ? (doc.setFontSize(8.5), doc.splitTextToSize(payment.details.trim(), pw - 8) as string[])
-    : [];
-  const payH = 8 + payLines.length * 8.6 + (detailLines.length ? 3 + detailLines.length * 3.9 : 0) + 2;
   setFill(SOFT);
   setDraw(LINE);
   doc.setLineWidth(0.3);
   doc.roundedRect(px, py, pw, payH, 1.8, 1.8, "FD");
   setFill(COPPER);
   doc.rect(px, py + 1.8, 1.2, payH - 3.6, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  setText(COPPER_DARK);
-  doc.text("PAGAMENTO", px + 5, py + 6, { charSpace: 0.4 });
-  py += 8;
-  for (const [label, value] of payLines) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.8);
-    setText(MUTED);
-    doc.text(label.toUpperCase(), px + 5, py + 3, { charSpace: 0.25 });
+  const boxTitle = (label: string, yy: number) => {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    setText(INK);
-    doc.text(value, px + 5, py + 7.2);
-    py += 8.6;
+    doc.setFontSize(8.5);
+    setText(COPPER_DARK);
+    doc.text(label, px + 5, yy, { charSpace: 0.4 });
+  };
+  const drawRows = (rows: [string, string][]) => {
+    for (const [label, value] of rows) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
+      setText(MUTED);
+      doc.text(label.toUpperCase(), px + 5, py + 3, { charSpace: 0.25 });
+      const lines = valueLines(value);
+      setText(INK);
+      doc.text(lines, px + 5, py + 7.2, { lineHeightFactor: 1.25 });
+      py += 4.4 + lines.length * 4.2;
+    }
+  };
+  boxTitle("PAGAMENTO", py + 6);
+  py += 8;
+  drawRows(payLines);
+  if (bankLines.length) {
+    setDraw(LINE);
+    doc.setLineWidth(0.25);
+    doc.line(px + 5, py + 1.2, px + pw - 4, py + 1.2);
+    boxTitle("DADOS PARA PAGAMENTO", py + 5.4);
+    py += 6;
+    drawRows(bankLines);
   }
   if (detailLines.length) {
     doc.setFont("helvetica", "normal");
@@ -526,18 +623,22 @@ export async function buildOrderPdf(input: OrderPdfInput) {
   const terms = isQuote
     ? [
         `Orçamento válido por ${payment.validityDays || 7} dias a partir da emissão.`,
-        "A produção é iniciada após a aprovação do orçamento e a confirmação do pagamento.",
+        term > 0
+          ? `Pagamento em até ${term} dias após a emissão, ao favorecido indicado neste documento.`
+          : "A produção é iniciada após a aprovação do orçamento e a confirmação do pagamento.",
         "Peças impressas em 3D podem apresentar pequenas variações de cor e textura, próprias do processo.",
       ]
     : [
-        "A produção é iniciada após a confirmação do pagamento (ou da entrada combinada).",
+        term > 0
+          ? `Pagamento em até ${term} dias após a emissão, ao favorecido indicado neste documento.`
+          : "A produção é iniciada após a confirmação do pagamento (ou da entrada combinada).",
         "Prazo de entrega contado a partir da confirmação do pagamento.",
         "Peças impressas em 3D podem apresentar pequenas variações de cor e textura, próprias do processo.",
       ];
   // Aceite com assinatura só no orçamento (é o que o cliente aprova).
   const withSignature = isQuote;
-  const termsH = 5.5 + terms.length * 3.8 + (withSignature ? 18 : 0);
-  if (y + termsH > H - 17) {
+  const termsH = 5.5 + terms.length * 3.8 + (withSignature ? 16 : 0);
+  if (y + termsH > H - 16) {
     doc.addPage();
     drawHeader(true);
     y = 32;
@@ -549,7 +650,7 @@ export async function buildOrderPdf(input: OrderPdfInput) {
   terms.forEach((t, i) => doc.text(`•  ${t}`, M + 1, y + 5.5 + i * 3.8));
   y += 5.5 + terms.length * 3.8;
   if (withSignature) {
-    y += 13;
+    y += 11;
     const sigW = (CW - 20) / 2;
     setDraw([168, 162, 158]);
     doc.setLineWidth(0.3);
@@ -557,7 +658,7 @@ export async function buildOrderPdf(input: OrderPdfInput) {
     doc.line(W - M - sigW, y, W - M, y);
     doc.setFontSize(7.8);
     setText(MUTED);
-    doc.text(company.name, M + sigW / 2, y + 4, { align: "center" });
+    doc.text(sellerName, M + sigW / 2, y + 4, { align: "center" });
     doc.text(`${customer?.name ?? "Cliente"} — aceite do orçamento`, W - M - sigW / 2, y + 4, { align: "center" });
   }
 
@@ -571,7 +672,12 @@ export async function buildOrderPdf(input: OrderPdfInput) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     setText(MUTED);
-    const foot = [company.name, company.whatsapp ? `WhatsApp ${formatPhone(company.whatsapp)}` : "", company.instagram ? `@${company.instagram.replace(/^@/, "")}` : ""]
+    const foot = [
+      company.name,
+      sup.name.trim() && sup.name.trim() !== company.name ? sup.name.trim() : "",
+      sup.email.trim(),
+      sellerPhone ? `WhatsApp ${formatPhone(sellerPhone)}` : "",
+    ]
       .filter(Boolean)
       .join("  •  ");
     doc.text(foot, M, H - 9.5);

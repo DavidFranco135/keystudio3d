@@ -7,11 +7,13 @@ import type { StoreAdminResponse } from "@/lib/store";
 import type { Customer, Order, OrderItem, Product } from "@/lib/types";
 import {
   DEFAULT_PAYMENT,
+  EMPTY_SUPPLIER,
   PAYMENT_METHODS,
   downloadOrderPdf,
   orderNumber,
   type CompanyInfo,
   type PaymentInfo,
+  type SupplierInfo,
 } from "@/lib/order-pdf";
 
 // Forma de pagamento escolhida fica salva neste navegador, por pedido, e a
@@ -27,7 +29,14 @@ function readPref(orderId: string): PaymentInfo {
     if (last) {
       const l = JSON.parse(last) as Partial<PaymentInfo>;
       // Do último pedido aproveita só o que costuma se repetir.
-      return { ...DEFAULT_PAYMENT, method: l.method ?? DEFAULT_PAYMENT.method, details: l.details ?? "", validityDays: l.validityDays ?? 7 };
+      return {
+        ...DEFAULT_PAYMENT,
+        method: l.method ?? DEFAULT_PAYMENT.method,
+        details: l.details ?? "",
+        validityDays: l.validityDays ?? 7,
+        termDays: l.termDays ?? 0,
+        shippingNote: l.shippingNote ?? DEFAULT_PAYMENT.shippingNote,
+      };
     }
   } catch {
     /* armazenamento indisponível */
@@ -39,6 +48,28 @@ function writePref(orderId: string, p: PaymentInfo) {
   try {
     localStorage.setItem(PREF_KEY(orderId), JSON.stringify(p));
     localStorage.setItem(LAST_KEY, JSON.stringify(p));
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
+
+// Dados do fornecedor (CPF, banco, PIX) ficam só neste aparelho: as
+// configurações da loja no servidor são públicas.
+const SUPPLIER_KEY = (orgId: string) => `pdf-fornecedor:${orgId}`;
+
+function readSupplier(orgId: string): SupplierInfo {
+  try {
+    const raw = localStorage.getItem(SUPPLIER_KEY(orgId));
+    if (raw) return { ...EMPTY_SUPPLIER, ...JSON.parse(raw) };
+  } catch {
+    /* armazenamento indisponível */
+  }
+  return EMPTY_SUPPLIER;
+}
+
+function writeSupplier(orgId: string, s: SupplierInfo) {
+  try {
+    localStorage.setItem(SUPPLIER_KEY(orgId), JSON.stringify(s));
   } catch {
     /* armazenamento indisponível */
   }
@@ -89,6 +120,8 @@ export function OrderPdfDialog({
   onClose: () => void;
 }) {
   const [pay, setPay] = useState<PaymentInfo>(DEFAULT_PAYMENT);
+  const [sup, setSup] = useState<SupplierInfo>(EMPTY_SUPPLIER);
+  const [showSupplier, setShowSupplier] = useState(false);
   const [discount, setDiscount] = useState("");
   const [shipping, setShipping] = useState("");
   const [loadedItems, setLoadedItems] = useState<OrderItem[] | undefined>(items);
@@ -98,13 +131,16 @@ export function OrderPdfDialog({
 
   useEffect(() => {
     const p = readPref(order.id);
+    const supplier = readSupplier(orgId);
     const id = setTimeout(() => {
       setPay(p);
+      setSup(supplier);
+      setShowSupplier(!supplier.name.trim() || !supplier.document.trim());
       setDiscount(p.discount ? String(p.discount) : "");
       setShipping(p.shipping ? String(p.shipping) : "");
     }, 0);
     return () => clearTimeout(id);
-  }, [order.id]);
+  }, [order.id, orgId]);
 
   useEffect(() => {
     if (items) return;
@@ -136,8 +172,9 @@ export function OrderPdfDialog({
     const payment: PaymentInfo = { ...pay, discount: d, shipping: f };
     try {
       writePref(order.id, payment);
+      writeSupplier(orgId, sup);
       const company = await loadCompany(orgPath, orgId, accessToken);
-      await downloadOrderPdf({ order, customer, items: list, products, company, payment });
+      await downloadOrderPdf({ order, customer, items: list, products, company, supplier: sup, payment });
       onClose();
     } catch {
       setError("Não foi possível gerar o PDF. Tente de novo.");
@@ -170,7 +207,77 @@ export function OrderPdfDialog({
           </button>
         </div>
 
+        <div className="mb-4 rounded-lg border border-neutral-800">
+          <button
+            type="button"
+            onClick={() => setShowSupplier((v) => !v)}
+            aria-expanded={showSupplier}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+          >
+            <span>
+              <span className="font-medium text-neutral-200">Seus dados (fornecedor)</span>
+              <span className="block text-xs text-neutral-500">
+                {sup.name.trim()
+                  ? [sup.name.trim(), sup.document.trim() && `CPF/CNPJ ${sup.document.trim()}`].filter(Boolean).join(" · ")
+                  : "Nome, CPF, contato e dados bancários — preencha uma vez"}
+              </span>
+            </span>
+            <span className={`text-xs text-neutral-500 transition-transform ${showSupplier ? "rotate-180" : ""}`}>▾</span>
+          </button>
+          {showSupplier && (
+            <div className="grid grid-cols-2 gap-3 border-t border-neutral-800 p-3">
+              <div className="col-span-2">
+                <label className={label}>Nome completo / razão social</label>
+                <input value={sup.name} onChange={(e) => setSup({ ...sup, name: e.target.value })} className={field} />
+              </div>
+              <div>
+                <label className={label}>CPF (ou CNPJ)</label>
+                <input inputMode="numeric" value={sup.document} onChange={(e) => setSup({ ...sup, document: e.target.value })} className={field} />
+              </div>
+              <div>
+                <label className={label}>Telefone / WhatsApp</label>
+                <input inputMode="tel" placeholder="Usa o da loja se vazio" value={sup.phone} onChange={(e) => setSup({ ...sup, phone: e.target.value })} className={field} />
+              </div>
+              <div className="col-span-2">
+                <label className={label}>E-mail comercial</label>
+                <input type="email" value={sup.email} onChange={(e) => setSup({ ...sup, email: e.target.value })} className={field} />
+              </div>
+              <div className="col-span-2">
+                <label className={label}>Endereço</label>
+                <input placeholder="Rua, nº, bairro, cidade - UF, CEP" value={sup.address} onChange={(e) => setSup({ ...sup, address: e.target.value })} className={field} />
+              </div>
+              <div className="col-span-2">
+                <label className={label}>Banco</label>
+                <input placeholder="Ex.: 260 - Nubank" value={sup.bank} onChange={(e) => setSup({ ...sup, bank: e.target.value })} className={field} />
+              </div>
+              <div>
+                <label className={label}>Agência</label>
+                <input value={sup.agency} onChange={(e) => setSup({ ...sup, agency: e.target.value })} className={field} />
+              </div>
+              <div>
+                <label className={label}>Conta (com dígito)</label>
+                <input value={sup.account} onChange={(e) => setSup({ ...sup, account: e.target.value })} className={field} />
+              </div>
+              <div className="col-span-2">
+                <label className={label}>Chave PIX</label>
+                <input value={sup.pixKey} onChange={(e) => setSup({ ...sup, pixKey: e.target.value })} className={field} />
+              </div>
+              <p className="col-span-2 text-xs text-neutral-500">
+                Fica salvo só neste aparelho e aparece em todos os PDFs.
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label}>A/C (comprador ou setor)</label>
+            <input placeholder="Opcional" value={pay.attention} onChange={(e) => setPay({ ...pay, attention: e.target.value })} className={field} />
+          </div>
+          <div>
+            <label className={label}>Nº pedido de compra</label>
+            <input placeholder="Opcional" value={pay.purchaseOrder} onChange={(e) => setPay({ ...pay, purchaseOrder: e.target.value })} className={field} />
+          </div>
           <div className="col-span-2">
             <label className={label}>Forma de pagamento</label>
             <select value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} className={field}>
@@ -207,6 +314,15 @@ export function OrderPdfDialog({
               <option value={70}>70%</option>
             </select>
           </div>
+          <div className="col-span-2">
+            <label className={label}>Prazo para pagamento</label>
+            <select value={pay.termDays} onChange={(e) => setPay({ ...pay, termDays: Number(e.target.value) })} className={field}>
+              <option value={0}>Sem prazo (na aprovação)</option>
+              {[7, 10, 14, 15, 21, 28, 30, 45, 60].map((d) => (
+                <option key={d} value={d}>{d} dias após a emissão</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className={label}>Desconto (R$)</label>
             <input inputMode="decimal" placeholder="0,00" value={discount} onChange={(e) => setDiscount(e.target.value)} className={field} />
@@ -215,6 +331,17 @@ export function OrderPdfDialog({
             <label className={label}>Frete / entrega (R$)</label>
             <input inputMode="decimal" placeholder="0,00" value={shipping} onChange={(e) => setShipping(e.target.value)} className={field} />
           </div>
+          {f === 0 && (
+            <div className="col-span-2">
+              <label className={label}>Frete sem valor aparece como</label>
+              <select value={pay.shippingNote} onChange={(e) => setPay({ ...pay, shippingNote: e.target.value })} className={field}>
+                <option value="A combinar">A combinar</option>
+                <option value="Incluso">Incluso</option>
+                <option value="Por conta do cliente">Por conta do cliente</option>
+                <option value="Retirada no local">Retirada no local</option>
+              </select>
+            </div>
+          )}
           {isQuote && (
             <div className="col-span-2">
               <label className={label}>Validade do orçamento (dias)</label>
@@ -228,10 +355,10 @@ export function OrderPdfDialog({
             </div>
           )}
           <div className="col-span-2">
-            <label className={label}>Dados para pagamento (opcional)</label>
+            <label className={label}>Informações adicionais de pagamento (opcional)</label>
             <textarea
               rows={2}
-              placeholder="Ex.: Chave PIX, dados bancários, condições combinadas…"
+              placeholder="Ex.: enviar comprovante para o e-mail…"
               value={pay.details}
               onChange={(e) => setPay({ ...pay, details: e.target.value })}
               className={field}

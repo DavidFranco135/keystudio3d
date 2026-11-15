@@ -15,7 +15,7 @@ import {
   useSwipe,
 } from "./ui";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
-import { IconCube, Model3D, ProductionEta, RelatedProducts, ShareProductButton } from "./extras";
+import { IconCube, Model3D, PriceTag, ProductionEta, RelatedProducts, ShareProductButton } from "./extras";
 
 export function ProductModal({
   product,
@@ -254,7 +254,7 @@ export function ProductModal({
                 product.price_on_request ? "text-2xl" : "text-3xl"
               }`}
             >
-              {priceLabel(product)}
+              <PriceTag product={product} badge />
             </p>
           </div>
 

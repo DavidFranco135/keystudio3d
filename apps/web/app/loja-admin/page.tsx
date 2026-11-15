@@ -432,6 +432,7 @@ export default function LojaAdminPage() {
         whatsapp: normalizeWhatsapp(settings.whatsapp) || DEFAULT_WHATSAPP,
         highlights: settings.highlights.filter((h) => h.title.trim() || h.text.trim()),
         trust_badges: (settings.trust_badges ?? []).map((b) => b.trim()).filter(Boolean),
+        cart_tiers: (settings.cart_tiers ?? []).filter((t) => t.percent > 0 && t.min_total > 0),
         // Só grava a ordem se o lojista reordenou; assim ids apagados saem da lista.
         product_order: settings.product_order.length > 0 ? orderedProducts.map((p) => p.id) : [],
         categories: settings.categories
@@ -449,6 +450,8 @@ export default function LojaAdminPage() {
       const savedCats = (savedAny.categories ?? []) as Array<{ cover_url?: string; cover_x?: number }>;
       const savedSlides = (savedAny.slides ?? []) as Array<{ x?: number | null }>;
       const apiIsOld =
+        // Descontos/selos/prazo: a API nova sempre devolve essas chaves.
+        savedAny.promo_percent === undefined ||
         (body.product_order.length > 0 && savedAny.product_order === undefined) ||
         // Categorias: a API nova sempre devolve cover_url e cover_x.
         (body.categories.length > 0 && savedCats.some((c) => c.cover_url === undefined || c.cover_x === undefined)) ||
@@ -461,7 +464,7 @@ export default function LojaAdminPage() {
       refreshPublicStoreCache(saved.slug);
       if (apiIsOld) {
         setError(
-          "Salvo, mas a API publicada ainda é a versão antiga: a ordem dos produtos, a foto/enquadramento das categorias e o enquadramento dos slides NÃO foram gravados. Republique a API (firebase deploy --only functions) e salve de novo."
+          "Salvo, mas a API publicada ainda é a versão antiga: descontos, selos, prazo de produção, modo escuro automático, a ordem dos produtos e o enquadramento das fotos NÃO foram gravados. Rode o PUBLICAR-API.bat (na pasta do site, em Documentos) e salve de novo."
         );
         setMessage(null);
       } else {
@@ -748,6 +751,142 @@ export default function LojaAdminPage() {
                   </p>
                 )}
               </div>
+            </Card>
+
+            <Card
+              title="Descontos e promoções"
+              hint="Promoção em todos os itens (ex.: Black Friday) e descontos por valor do pedido (ex.: 20% a partir de R$ 500). Os avisos aparecem na faixa do topo e num banner da página inicial, e o desconto é calculado no carrinho e na mensagem do WhatsApp. Desconto de um produto só: em Produtos → Editar."
+            >
+              <div className="space-y-2 rounded-lg border border-neutral-800 p-3">
+                <p className="text-sm font-medium">Promoção em todos os itens</p>
+                <div className="grid gap-2 sm:grid-cols-[110px_1fr]">
+                  <label className="space-y-1">
+                    <span className="block text-xs text-neutral-500">% OFF</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      step={1}
+                      inputMode="decimal"
+                      className={input}
+                      value={settings.promo_percent ? String(settings.promo_percent) : ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        update({ promo_percent: Math.max(0, Math.min(90, Number(e.target.value) || 0)) })
+                      }
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="block text-xs text-neutral-500">Nome da promoção</span>
+                    <input
+                      className={input}
+                      maxLength={60}
+                      value={settings.promo_label ?? ""}
+                      placeholder="Black Friday"
+                      onChange={(e) => update({ promo_label: e.target.value })}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="block text-xs text-neutral-500">Começa em (vazio = já)</span>
+                    <input
+                      type="date"
+                      className={input}
+                      value={settings.promo_start ?? ""}
+                      onChange={(e) => update({ promo_start: e.target.value })}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="block text-xs text-neutral-500">Termina em (vazio = sem fim)</span>
+                    <input
+                      type="date"
+                      className={input}
+                      value={settings.promo_end ?? ""}
+                      onChange={(e) => update({ promo_end: e.target.value })}
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  Para desligar, deixe 0%. Fora das datas a promoção some sozinha da loja.
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-neutral-800 p-3">
+                <p className="text-sm font-medium">Desconto por valor do pedido</p>
+                {(settings.cart_tiers ?? []).map((tier, i) => (
+                  <div key={i} className="flex flex-wrap items-end gap-2">
+                    <label className="space-y-1">
+                      <span className="block text-xs text-neutral-500">% OFF</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={90}
+                        inputMode="decimal"
+                        className={`${input} w-24`}
+                        value={tier.percent || ""}
+                        onChange={(e) =>
+                          update({
+                            cart_tiers: (settings.cart_tiers ?? []).map((t, j) =>
+                              j === i ? { ...t, percent: Math.max(0, Math.min(90, Number(e.target.value) || 0)) } : t
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="block text-xs text-neutral-500">a partir de (R$)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step="0.01"
+                        inputMode="decimal"
+                        className={`${input} w-36`}
+                        value={tier.min_total || ""}
+                        onChange={(e) =>
+                          update({
+                            cart_tiers: (settings.cart_tiers ?? []).map((t, j) =>
+                              j === i ? { ...t, min_total: Math.max(0, Number(e.target.value) || 0) } : t
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      onClick={() => update({ cart_tiers: (settings.cart_tiers ?? []).filter((_, j) => j !== i) })}
+                      className="rounded border border-red-900 px-3 py-2 text-xs text-red-400 hover:bg-red-950"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {(settings.cart_tiers ?? []).length < 5 && (
+                  <button
+                    onClick={() =>
+                      update({ cart_tiers: [...(settings.cart_tiers ?? []), { percent: 10, min_total: 300 }] })
+                    }
+                    className="text-sm text-blue-400 hover:underline"
+                  >
+                    + Adicionar faixa
+                  </button>
+                )}
+              </div>
+
+              <label className="flex items-start gap-3 rounded-lg border border-neutral-800 p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={!!settings.discounts_stack}
+                  onChange={(e) => update({ discounts_stack: e.target.checked })}
+                />
+                <span>
+                  <span className="block text-sm">Acumular descontos</span>
+                  <span className="block text-xs text-neutral-500">
+                    Desmarcado (recomendado): vale só o maior desconto — o do produto/promoção ou o do valor do
+                    pedido. Marcado: o desconto do pedido entra por cima do preço já com desconto.
+                  </span>
+                </span>
+              </label>
             </Card>
 
             <Card

@@ -1,5 +1,7 @@
 import time
+from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -67,6 +69,21 @@ def hide_product_in_store(db: Session, *, organization_id: UUID, product_id: UUI
     _public_cache.pop(org.slug, None)
 
 
+_BRT = ZoneInfo("America/Sao_Paulo")
+
+
+def _active_promo_percent(settings) -> float:
+    """Porcentagem da promoção geral se ela vale hoje (horário de Brasília)."""
+    if settings.promo_percent <= 0:
+        return 0.0
+    today = datetime.now(_BRT).date().isoformat()
+    if settings.promo_start and today < settings.promo_start:
+        return 0.0
+    if settings.promo_end and today > settings.promo_end:
+        return 0.0
+    return float(settings.promo_percent)
+
+
 def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     cached = _public_cache.get(slug)
     if cached is not None and time.monotonic() - cached[0] < _PUBLIC_CACHE_TTL_SECONDS:
@@ -113,6 +130,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
     for category in named_categories:
         for product_id in category.product_ids:
             categories_of.setdefault(product_id, []).append(category.id)
+    promo = _active_promo_percent(settings)
     products: list[PublicProduct] = []
     for product in visible_products:
         if product.manual_price is not None:
@@ -141,6 +159,9 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
                 category_ids=categories_of.get(str(product.id), []),
                 price_on_request=hide_price,
                 model_url=settings.model_urls.get(str(product.id), ""),
+                discount_percent=0.0
+                if hide_price
+                else max(promo, settings.product_discounts.get(str(product.id), 0.0)),
             )
         )
 
@@ -180,6 +201,11 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
             auto_dark=settings.auto_dark,
             trust_badges=settings.trust_badges,
             production_days=settings.production_days,
+            promo_percent=promo,
+            promo_label=settings.promo_label if promo else "",
+            promo_end=settings.promo_end if promo else "",
+            cart_tiers=sorted(settings.cart_tiers, key=lambda t: t.min_total),
+            discounts_stack=settings.discounts_stack,
         ),
         products=products,
     )

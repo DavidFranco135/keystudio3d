@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
-import { PAYMENT_TERMS, darkVariant, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
+import { PAYMENT_TERMS, computeTotals, darkVariant, promoNotices, unitPrice, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
 import { trackStoreEvent, useVisitTracker } from "@/lib/visits";
@@ -34,6 +34,7 @@ import { IMG_WIDTH, imgSrc } from "@/lib/img";
 import {
   InstallAppButton,
   ProductionEta,
+  PromoBanner,
   TrustBadges,
   pickRelated,
   productLink,
@@ -369,7 +370,11 @@ export function Storefront({ slug }: { slug: string }) {
     [lines, productsById]
   );
   const units = orderLines.reduce((sum, l) => sum + l.qty, 0);
-  const total = orderLines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+  const discountRules = useMemo(
+    () => ({ tiers: store?.settings.cart_tiers ?? [], stack: !!store?.settings.discounts_stack }),
+    [store]
+  );
+  const total = computeTotals(orderLines, discountRules).total;
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -475,8 +480,8 @@ export function Storefront({ slug }: { slug: string }) {
     );
     const byRequest = (a: PublicProduct, b: PublicProduct) =>
       Number(a.price_on_request) - Number(b.price_on_request);
-    if (sort === "price-asc") list = [...list].sort((a, b) => byRequest(a, b) || a.price - b.price);
-    else if (sort === "price-desc") list = [...list].sort((a, b) => byRequest(a, b) || b.price - a.price);
+    if (sort === "price-asc") list = [...list].sort((a, b) => byRequest(a, b) || unitPrice(a) - unitPrice(b));
+    else if (sort === "price-desc") list = [...list].sort((a, b) => byRequest(a, b) || unitPrice(b) - unitPrice(a));
     else if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
     // "Relevância": a ordem escolhida pelo lojista em Minha Loja (já vem do servidor).
     return list;
@@ -620,6 +625,7 @@ export function Storefront({ slug }: { slug: string }) {
       <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
         <AnnouncementBar
           items={[
+            ...promoNotices(settings),
             PAYMENT_TERMS,
             "Pedidos pelo WhatsApp, sem cadastro",
             ...(settings.production_days?.trim() ? [`Prazo de produção: ${settings.production_days.trim()}`] : []),
@@ -720,6 +726,8 @@ export function Storefront({ slug }: { slug: string }) {
                 </button>
 
                 <TrustBadges badges={settings.trust_badges} />
+
+                <PromoBanner notices={promoNotices(settings)} stack={!!settings.discounts_stack} />
 
                 {featuredProducts.length > 0 && (
                   <section className="space-y-6">
@@ -1302,6 +1310,7 @@ export function Storefront({ slug }: { slug: string }) {
         onSent={() => showToast("Abrindo o WhatsApp…")}
         badges={settings.trust_badges}
         productionDays={settings.production_days}
+        rules={discountRules}
       />
     </div>
     </>

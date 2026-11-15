@@ -9,8 +9,8 @@ const SLIDE_MS = 5500;
 // Formato usado até a primeira foto carregar, e limites para fotos muito
 // estreitas/largas não deixarem a capa alta demais ou fina demais.
 const DEFAULT_RATIO = 16 / 9;
-const MIN_RATIO = 4 / 3;
-const MAX_RATIO = 21 / 9;
+const MIN_RATIO = 1;
+const MAX_RATIO = 3;
 
 export function HeroSlider({
   slides,
@@ -63,11 +63,12 @@ export function HeroSlider({
   // (e normalmente na própria arte da capa), repetir aqui fica redundante.
   const title = current?.title ?? "";
   const subtitle = current?.subtitle ?? "";
+  const hasText = Boolean(title || subtitle);
 
   return (
     <section
       aria-roledescription="carrossel"
-      className="group relative isolate w-full overflow-hidden rounded-[28px] bg-[var(--accent)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]"
+      className="group relative isolate w-full overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-40px_rgba(0,0,0,0.45)] lg:rounded-none lg:border-x-0 lg:border-t-0 lg:shadow-none"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
         setPaused(false);
@@ -84,11 +85,19 @@ export function HeroSlider({
         e.stopPropagation();
       }}
     >
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_20%_10%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(135deg,var(--accent),#0b0b10)]" />
 
       {/* Área da foto: tem o formato da própria foto, então nada é cortado.
           No celular o texto vem logo abaixo; do tablet pra cima, por cima. */}
-      <div className="relative w-full sm:min-h-[380px]" style={{ aspectRatio: String(ratio) }}>
+      {/* No computador a altura é limitada à tela (menos o cabeçalho): a capa
+          cabe inteira na primeira vista, e o fundo desfocado completa as laterais. */}
+      <div
+        className={`relative w-full overflow-hidden lg:max-h-[calc(100vh-6rem)] ${hasText ? "" : "cursor-pointer"}`}
+        style={{ aspectRatio: String(ratio) }}
+        // Capa sem texto (arte pronta, com o botão já desenhado): clicar abre o catálogo.
+        onClick={() => {
+          if (!hasText) onCatalog();
+        }}
+      >
       {slides.map((slide, i) => {
         // Slide enquadrado pelo lojista: a foto preenche a capa a partir do ponto
         // escolhido. Sem enquadramento: foto inteira, sem corte (como sempre foi).
@@ -109,7 +118,7 @@ export function HeroSlider({
             alt=""
             aria-hidden
             loading={i === 0 ? "eager" : "lazy"}
-            className={`absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75 ${
+            className={`absolute inset-0 h-full w-full scale-110 object-cover blur-2xl ${
               i === index ? "animate-kenburns" : ""
             }`}
           />
@@ -128,12 +137,14 @@ export function HeroSlider({
         );
       })}
 
-      <div className="absolute inset-0 hidden bg-gradient-to-t from-black/75 via-black/25 to-black/10 sm:block" />
-      <div className="absolute inset-0 hidden bg-gradient-to-r from-black/35 via-transparent to-transparent sm:block" />
+      {/* Sombra só na base e só quando o slide tem texto: a foto fica com as cores originais. */}
+      {hasText && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-3/5 bg-gradient-to-t from-black/60 via-black/20 to-transparent sm:block" />
+      )}
       </div>
 
-      <div className="relative p-6 pb-14 sm:absolute sm:inset-x-0 sm:bottom-0 sm:p-10 sm:pb-20 lg:p-14 lg:pb-24">
-        <div key={`${index}-${title}`} className="max-w-2xl space-y-4 text-white">
+      <div className={`relative px-5 pt-5 sm:absolute sm:bottom-0 sm:left-0 sm:right-0 sm:p-10 sm:pb-20 lg:mx-auto lg:max-w-[1600px] lg:px-14 lg:pb-24 ${count > 1 ? "pb-12" : "pb-5"} ${hasText ? "" : "sm:hidden"}`}>
+        <div key={`${index}-${title}`} className={`max-w-2xl text-[var(--ink)] sm:text-white ${hasText ? "space-y-4" : ""}`}>
           {title ? (
             <h1
               className="animate-fade-up font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
@@ -149,19 +160,19 @@ export function HeroSlider({
           )}
           {subtitle && (
             <p
-              className="max-w-xl animate-fade-up text-base text-white/80 sm:text-lg"
+              className="max-w-xl animate-fade-up text-base text-[var(--muted)] sm:text-lg sm:text-white/85"
               style={{ animationDelay: "160ms" }}
             >
               {subtitle}
             </p>
           )}
           <div
-            className="flex animate-fade-up flex-wrap gap-3 pt-2"
+            className={`flex animate-fade-up gap-2.5 sm:flex-wrap sm:gap-3 [&>*]:flex-1 [&>*]:justify-center sm:[&>*]:flex-none ${hasText ? "pt-2" : ""}`}
             style={{ animationDelay: "240ms" }}
           >
             <button
               onClick={onCatalog}
-              className="fx-btn group/btn inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-neutral-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+              className="fx-btn group/btn inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold sm:px-6 sm:py-3 text-[var(--accent-ink)] shadow-lg sm:bg-white sm:text-neutral-900 transition hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
             >
               Ver catálogo
               <IconArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
@@ -170,10 +181,11 @@ export function HeroSlider({
               href={whatsappHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/20"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold sm:px-6 sm:py-3 text-[var(--ink)] transition hover:-translate-y-0.5 sm:border-white/40 sm:bg-black/25 sm:text-white sm:backdrop-blur-md sm:hover:bg-black/40"
             >
               <IconWhatsapp className="h-4 w-4" />
-              Falar no WhatsApp
+              <span className="whitespace-nowrap sm:hidden">WhatsApp</span>
+              <span className="hidden whitespace-nowrap sm:inline">Falar no WhatsApp</span>
             </a>
           </div>
         </div>
@@ -181,19 +193,19 @@ export function HeroSlider({
 
       {count > 1 && (
         <>
-          <div className="absolute inset-x-6 bottom-6 flex items-center gap-2 sm:inset-x-10 sm:bottom-8 lg:inset-x-14">
+          <div className="absolute inset-x-5 bottom-5 flex items-center gap-2 sm:inset-x-10 sm:bottom-8 lg:left-1/2 lg:w-[min(560px,60%)] lg:-translate-x-1/2">
             {slides.map((_, i) => (
               <button
                 key={i}
                 onClick={() => go(i)}
                 aria-label={`Ir para o slide ${i + 1}`}
-                className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/30"
+                className="relative h-1 flex-1 overflow-hidden rounded-full bg-[var(--line)] sm:bg-white/40"
               >
-                {i < index && <span className="absolute inset-0 bg-white" />}
+                {i < index && <span className="absolute inset-0 bg-[var(--accent)] sm:bg-white" />}
                 {i === index && (
                   <span
                     key={progressKey}
-                    className="absolute inset-0 origin-left animate-progress bg-white"
+                    className="absolute inset-0 origin-left animate-progress bg-[var(--accent)] sm:bg-white"
                     style={{ animationPlayState: paused ? "paused" : "running" }}
                   />
                 )}

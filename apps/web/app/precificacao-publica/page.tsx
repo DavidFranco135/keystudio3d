@@ -84,10 +84,14 @@ export default function PrecificacaoPublicaPage() {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
+      // Precisa ser depois da montagem: a página é pré-renderizada sem acesso
+      // ao navegador, e ler antes faria o HTML e a tela divergirem.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setState({ ...DEFAULTS, ...JSON.parse(raw) });
     } catch {
       // ignore — start from defaults
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHydrated(true);
   }, []);
 

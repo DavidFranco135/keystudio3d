@@ -495,7 +495,7 @@ export function Storefront({ slug }: { slug: string }) {
     <div
       style={vars}
       ref={rootRef}
-      className="store-fx min-h-screen bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
+      className="store-fx min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
     >
       <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -571,13 +571,15 @@ export function Storefront({ slug }: { slug: string }) {
           {tab === 0 && (
             <div className="space-y-20 sm:space-y-28">
               <div className="space-y-10 sm:space-y-14">
-                <HeroSlider
-                  slides={slides}
-                  storeName={storeName}
-                  tagline={settings.tagline}
-                  whatsappHref={waGeneral}
-                  onCatalog={() => openCategory(null)}
-                />
+                <div className="lg:relative lg:left-1/2 lg:-mt-8 lg:w-screen lg:-translate-x-1/2">
+                  <HeroSlider
+                    slides={slides}
+                    storeName={storeName}
+                    tagline={settings.tagline}
+                    whatsappHref={waGeneral}
+                    onCatalog={() => openCategory(null)}
+                  />
+                </div>
 
                 <button
                   onClick={openSearch}

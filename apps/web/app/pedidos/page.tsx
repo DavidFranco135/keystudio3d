@@ -465,7 +465,7 @@ export default function PedidosPage() {
     setIsSaving(true);
     setError(null);
     try {
-      await apiFetch(`${orgPath}/orders`, {
+      const created = await apiFetch<Order>(`${orgPath}/orders`, {
         method: "POST",
         accessToken,
         body: JSON.stringify({
@@ -484,6 +484,8 @@ export default function PedidosPage() {
       setDueDate("");
       setShowForm(false);
       await load();
+      // O pedido novo já abre na parte de produtos, pronto para receber itens.
+      void openProducts(created.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao criar pedido.");
     } finally {
@@ -509,6 +511,8 @@ export default function PedidosPage() {
   }
 
   function startEditOrder(order: Order) {
+    // Editar também mostra os produtos do pedido, logo abaixo dos dados.
+    if (expandedOrderId !== order.id) void toggleItems(order.id);
     setEditingOrderId(order.id);
     setEditCustomerId(order.customer_id);
     setEditNotes(order.notes ?? "");
@@ -642,6 +646,14 @@ export default function PedidosPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao remover item.");
     }
+  }
+
+  // Abre os detalhes do pedido e rola até "Produtos do pedido".
+  async function openProducts(orderId: string) {
+    if (expandedOrderId !== orderId) await toggleItems(orderId);
+    setTimeout(() => {
+      document.getElementById(`produtos-${orderId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 350);
   }
 
   async function toggleItems(orderId: string) {
@@ -932,6 +944,9 @@ export default function PedidosPage() {
                     <button onClick={() => startEditOrder(order)} className="text-blue-400 hover:underline">
                       Editar
                     </button>
+                    <button onClick={() => openProducts(order.id)} className="text-blue-400 hover:underline">
+                      Produtos ({(order.items ?? []).length})
+                    </button>
                     <button onClick={() => setPdfOrderId(order.id)} className="text-amber-400 hover:underline">
                       Gerar PDF
                     </button>
@@ -998,6 +1013,10 @@ export default function PedidosPage() {
                         customer={customers.find((c) => c.id === order.customer_id) ?? null}
                         items={itemsByOrder[order.id]}
                       />
+                      <div id={`produtos-${order.id}`} className="flex scroll-mt-24 items-center justify-between gap-2 border-t border-neutral-800 pt-3">
+                        <h3 className="text-sm font-semibold text-neutral-200">Produtos do pedido</h3>
+                        <span className="text-xs text-neutral-500">Edite, remova ou adicione abaixo</span>
+                      </div>
                       {!itemsByOrder[order.id] ? (
                         <p className="text-sm text-neutral-500">Carregando itens…</p>
                       ) : itemsByOrder[order.id].length === 0 ? (
@@ -1009,7 +1028,7 @@ export default function PedidosPage() {
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate">
-                                    {productName(item.product_id)} · Qtd. {item.quantity} — {item.status}
+                                    {productName(item.product_id)} · Qtd. {item.quantity}
                                   </span>
                                   <span className="block text-xs text-neutral-500">
                                     Unit.: {formatCurrency(item.unit_price ?? 0)} · Custo unit.:{" "}
@@ -1018,11 +1037,17 @@ export default function PedidosPage() {
                                 </span>
                                 <span className="shrink-0">{formatCurrency((item.unit_price ?? 0) * item.quantity)}</span>
                                 <span className="shrink-0 space-x-2">
-                                  <button onClick={() => startEditItem(item)} className="text-xs text-blue-400 hover:underline">
-                                    Editar
+                                  <button
+                                    onClick={() => (editingItemId === item.id ? cancelEditItem() : startEditItem(item))}
+                                    className="rounded-full border border-blue-500/40 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/10"
+                                  >
+                                    {editingItemId === item.id ? "Fechar" : "Editar"}
                                   </button>
-                                  <button onClick={() => handleDeleteItem(order.id, item)} className="text-xs text-red-400 hover:underline">
-                                    Excluir
+                                  <button
+                                    onClick={() => handleDeleteItem(order.id, item)}
+                                    className="rounded-full border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                                  >
+                                    Remover
                                   </button>
                                 </span>
                               </div>
@@ -1070,8 +1095,9 @@ export default function PedidosPage() {
                       ) : (
                         <form
                           onSubmit={(e) => handleAddItem(order.id, e)}
-                          className="grid grid-cols-1 gap-2 border-t border-neutral-800 pt-3 sm:grid-cols-2"
+                          className="grid grid-cols-1 gap-2 rounded-lg border border-dashed border-neutral-700 p-3 sm:grid-cols-2"
                         >
+                          <p className="text-xs font-medium text-neutral-400 sm:col-span-2">Adicionar produto ao pedido</p>
                           <ProductPicker
                             products={products}
                             value={itemProductId}
@@ -1107,7 +1133,7 @@ export default function PedidosPage() {
                             disabled={isAddingItem || isPricingItem || !itemProductId}
                             className="w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
                           >
-                            {isPricingItem ? "Calculando…" : isAddingItem ? "Adicionando…" : "Adicionar item"}
+                            {isPricingItem ? "Calculando…" : isAddingItem ? "Adicionando…" : "+ Adicionar produto"}
                           </button>
                           {!defaultCostProfile && (
                             <p className="text-xs text-yellow-300 sm:col-span-2">

@@ -15,6 +15,8 @@ const STORE_ROUTES = { "/loja": null, "/loja/": null, "/loja.html": null };
 const DEFAULT_SLUG = "keystudio";
 // Página da loja usada no sitemap (com o ?s=).
 const SITEMAP_BASE = "/loja?s=keystudio";
+// Imagem da prévia da página da loja ("" = usa a logo da loja).
+const STORE_SHARE_IMAGE = "";
 // ----------------------------------------------------------------------------
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,80}$/i;
@@ -123,7 +125,7 @@ function buildMeta(store, url) {
   return {
     title,
     description,
-    image: shareImage(s.logo_url, origin),
+    image: shareImage(STORE_SHARE_IMAGE || s.logo_url, origin),
     canonical: canonical.toString(),
     type: "website",
     ld,

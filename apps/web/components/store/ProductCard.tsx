@@ -5,7 +5,7 @@ import { priceLabel } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { IconMinus, IconPlus } from "./ui";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
-import { DiscountRibbon, IconCube, PriceTag } from "./extras";
+import { IconCube } from "./extras";
 
 export function ProductCard({
   product,
@@ -57,7 +57,6 @@ export function ProductCard({
               Esgotado
             </span>
           )}
-          {product.available && <DiscountRibbon product={product} />}
           {product.model_url && (
             <span className="flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur">
               <IconCube className="h-3 w-3" />
@@ -90,7 +89,7 @@ export function ProductCard({
             <p className="text-sm font-semibold text-[var(--accent-text)]">{priceLabel(product)}</p>
           ) : (
             <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
-              <PriceTag product={product} finalClassName={product.discount_percent ? "text-[#c2372f]" : ""} />
+              {priceLabel(product)}
             </p>
           )}
 

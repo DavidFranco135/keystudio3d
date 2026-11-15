@@ -2,14 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { PublicProduct } from "@/lib/store";
-import {
-  discountBadge,
-  formatReadyDate,
-  fullPriceLabel,
-  hasDiscount,
-  priceLabel,
-  productionReadyDate,
-} from "@/lib/store";
+import { formatReadyDate, priceLabel, productionReadyDate } from "@/lib/store";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 // Recursos extras da vitrine: selos de confiança, prazo de produção, modelo
@@ -457,75 +450,4 @@ export function useStoreServiceWorker() {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
-}
-
-// Preço com desconto: valor final + preço cheio riscado (+ selo opcional).
-export function PriceTag({
-  product,
-  qty = 1,
-  className = "",
-  finalClassName = "",
-  badge = false,
-}: {
-  product: PublicProduct;
-  qty?: number;
-  className?: string;
-  finalClassName?: string;
-  badge?: boolean;
-}) {
-  if (!hasDiscount(product)) return <span className={`${className} ${finalClassName}`}>{priceLabel(product, qty)}</span>;
-  return (
-    <span className={`inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${className}`}>
-      <span className={finalClassName}>{priceLabel(product, qty)}</span>
-      <s className="text-[0.62em] font-normal text-[var(--muted)] decoration-1">{fullPriceLabel(product, qty)}</s>
-      {badge && (
-        <span className="rounded-full bg-[#d6453d] px-2 py-0.5 font-[family-name:var(--font-sans)] text-[11px] font-bold not-italic text-white">
-          {discountBadge(product)}
-        </span>
-      )}
-    </span>
-  );
-}
-
-// Selo "% OFF" sobre a foto do card.
-export function DiscountRibbon({ product }: { product: PublicProduct }) {
-  if (!hasDiscount(product)) return null;
-  return (
-    <span className="fx-shine rounded-full bg-[#d6453d] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow">
-      {discountBadge(product).slice(1)} OFF
-    </span>
-  );
-}
-
-// Faixa de promoções da página inicial (Black Friday, % a partir de R$ X…).
-export function PromoBanner({ notices, stack = false }: { notices: string[]; stack?: boolean }) {
-  if (notices.length === 0) return null;
-  return (
-    <section
-      aria-label="Promoções"
-      className="relative overflow-hidden rounded-[28px] bg-[#1c120c] px-6 py-6 text-white shadow-xl sm:px-10 sm:py-8"
-    >
-      <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#d6453d]/40 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 left-10 h-56 w-56 rounded-full bg-[var(--accent)]/30 blur-3xl" />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#ffb4a8]">Promoções</p>
-          <ul className="space-y-1.5">
-            {notices.map((n) => (
-              <li key={n} className="flex items-start gap-2 font-[family-name:var(--font-display)] text-xl font-semibold leading-snug sm:text-2xl">
-                <span aria-hidden className="mt-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#d6453d] px-1 text-xs font-bold">
-                  %
-                </span>
-                {n}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="max-w-xs text-sm text-white/70">
-          O desconto já aparece no carrinho e na mensagem do pedido.
-          {notices.length > 1 && !stack && " Os descontos não se acumulam: vale sempre o maior."}
-        </p>
-      </div>
-    </section>
-  );
 }

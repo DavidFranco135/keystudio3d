@@ -2,17 +2,7 @@
 
 import { useEffect } from "react";
 import type { OrderLine } from "@/lib/store";
-import type { DiscountRules } from "@/lib/store";
-import {
-  buildOrderMessage,
-  computeTotals,
-  formatBRL,
-  formatPercent,
-  fullPriceLabel,
-  hasDiscount,
-  priceLabel,
-  whatsappLink,
-} from "@/lib/store";
+import { buildOrderMessage, priceLabel, whatsappLink } from "@/lib/store";
 import { formatCurrency } from "@/lib/format";
 import { focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
@@ -38,7 +28,6 @@ export function CartDrawer({
   onSent,
   badges,
   productionDays,
-  rules,
 }: {
   open: boolean;
   lines: OrderLine[];
@@ -55,7 +44,6 @@ export function CartDrawer({
   onSent: () => void;
   badges?: string[];
   productionDays?: string;
-  rules?: DiscountRules;
 }) {
   useOverlayHistory(open, onClose);
 
@@ -73,13 +61,10 @@ export function CartDrawer({
 
   if (!open) return null;
 
-  const totals = computeTotals(lines, rules);
-  const total = totals.total;
-  // Sem acumular, quando a faixa do pedido vale ela substitui os descontos dos produtos.
-  const tierReplacesItems = !!totals.tier && !rules?.stack;
+  const total = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
   const anyOnRequest = lines.some((l) => l.product.price_on_request);
   const units = lines.reduce((sum, l) => sum + l.qty, 0);
-  const href = whatsappLink(whatsapp, buildOrderMessage(storeName, lines, customer, rules));
+  const href = whatsappLink(whatsapp, buildOrderMessage(storeName, lines, customer));
 
   return (
     <div className="fixed inset-0 z-[80] animate-fade-in bg-black/55 backdrop-blur-sm" onClick={onClose}>
@@ -184,20 +169,7 @@ export function CartDrawer({
                             <IconPlus className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <p className="text-right text-sm font-semibold">
-                          {tierReplacesItems && !product.price_on_request ? (
-                            formatBRL(product.price * qty)
-                          ) : (
-                            <>
-                              {priceLabel(product, qty)}
-                              {hasDiscount(product) && (
-                                <s className="block text-[11px] font-normal text-[var(--muted)]">
-                                  {fullPriceLabel(product, qty)}
-                                </s>
-                              )}
-                            </>
-                          )}
-                        </p>
+                        <p className="text-sm font-semibold">{priceLabel(product, qty)}</p>
                       </div>
                     </div>
                   </div>
@@ -230,44 +202,6 @@ export function CartDrawer({
             </div>
 
             <footer className="space-y-3 border-t border-[var(--line)] bg-[var(--surface)] px-6 py-5">
-              {totals.next && (
-                <div className="space-y-1.5 rounded-2xl bg-[var(--accent-soft)] px-4 py-3">
-                  <p className="text-xs font-medium">
-                    Faltam <strong>{formatBRL(totals.next.missing)}</strong> para ganhar{" "}
-                    <strong>{formatPercent(totals.next.tier.percent)} OFF</strong> no pedido
-                  </p>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--line)]">
-                    <div
-                      className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500"
-                      style={{
-                        width: `${Math.min(100, ((totals.next.tier.min_total - totals.next.missing) / totals.next.tier.min_total) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {totals.savings > 0 && (
-                <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between text-[var(--muted)]">
-                    <dt>Subtotal</dt>
-                    <dd>{formatBRL(totals.full)}</dd>
-                  </div>
-                  {totals.itemSavings > 0 && (
-                    <div className="flex justify-between text-[#c2372f]">
-                      <dt>Descontos dos produtos</dt>
-                      <dd>-{formatBRL(totals.itemSavings)}</dd>
-                    </div>
-                  )}
-                  {totals.tier && (
-                    <div className="flex justify-between gap-3 text-[#c2372f]">
-                      <dt>
-                        {formatPercent(totals.tier.percent)} OFF (a partir de {formatBRL(totals.tier.min_total)})
-                      </dt>
-                      <dd>-{formatBRL(totals.tierSavings)}</dd>
-                    </div>
-                  )}
-                </dl>
-              )}
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-[var(--muted)]">Total estimado</span>
                 <span className="font-[family-name:var(--font-display)] text-3xl font-semibold">

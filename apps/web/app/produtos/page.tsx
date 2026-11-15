@@ -107,8 +107,6 @@ export default function ProdutosPage() {
   const [formPriceOnRequest, setFormPriceOnRequest] = useState(false);
   // Link do modelo 3D (.glb) mostrado no "Ver em 3D" da loja.
   const [formModelUrl, setFormModelUrl] = useState("");
-  // Desconto (% OFF) deste produto na loja.
-  const [formDiscount, setFormDiscount] = useState("");
   const [formVisible, setFormVisible] = useState(true);
   const [search, setSearch] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
@@ -434,7 +432,6 @@ export default function ProdutosPage() {
     setFormCategoryIds([]);
     setFormPriceOnRequest(false);
     setFormModelUrl("");
-    setFormDiscount("");
     setFormVisible(true);
     setMode("completo");
     setEditingId(null);
@@ -503,7 +500,6 @@ export default function ProdutosPage() {
     setFormCategoryIds(categories.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id));
     setFormPriceOnRequest(storeSettings?.price_on_request_product_ids?.includes(product.id) ?? false);
     setFormModelUrl(storeSettings?.model_urls?.[product.id] ?? "");
-    setFormDiscount(String(storeSettings?.product_discounts?.[product.id] ?? ""));
     setFormVisible(!(storeSettings?.hidden_product_ids ?? []).includes(product.id));
     setMode(product.manual_price != null ? "simples" : "completo");
     setShowForm(true);
@@ -565,14 +561,6 @@ export default function ProdutosPage() {
           if (modelUrl) nextModels[productId] = modelUrl;
           else delete nextModels[productId];
           patch.model_urls = nextModels;
-        }
-        const discounts = storeSettings.product_discounts ?? {};
-        const discount = Math.max(0, Math.min(90, Number(formDiscount.replace(",", ".")) || 0));
-        if ((discounts[productId] ?? 0) !== discount) {
-          const nextDiscounts = { ...discounts };
-          if (discount > 0) nextDiscounts[productId] = discount;
-          else delete nextDiscounts[productId];
-          patch.product_discounts = nextDiscounts;
         }
         const hiddenNow = storeSettings.hidden_product_ids ?? [];
         if (hiddenNow.includes(productId) === formVisible) {
@@ -1050,26 +1038,6 @@ export default function ProdutosPage() {
                     O cliente vê “Preço a consultar” em vez do valor e combina pelo WhatsApp.
                   </span>
                 </span>
-              </label>
-            )}
-
-            {storeSettings && (
-              <label className="block space-y-1">
-                <span className="block text-xs text-neutral-500">
-                  Desconto na loja (% OFF) — o cliente vê o preço riscado e o novo valor. Vazio ou 0 = sem desconto.
-                  Se houver promoção geral (ex.: Black Friday), vale o maior dos dois.
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  max={90}
-                  step="1"
-                  inputMode="decimal"
-                  value={formDiscount}
-                  onChange={(e) => setFormDiscount(e.target.value)}
-                  placeholder="Ex.: 15"
-                  className="w-32 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm placeholder:text-neutral-600"
-                />
               </label>
             )}
 

@@ -708,13 +708,6 @@ class StoreSlide(BaseModel):
     y: float | None = Field(default=None, ge=0, le=100)
 
 
-class CartTier(BaseModel):
-    """Desconto progressivo: `percent`% no pedido a partir de `min_total` reais."""
-
-    min_total: float = Field(gt=0, le=1_000_000)
-    percent: float = Field(gt=0, le=90)
-
-
 class StoreHighlight(BaseModel):
     title: str = Field(default="", max_length=80)
     text: str = Field(default="", max_length=240)
@@ -779,27 +772,6 @@ class StoreSettings(BaseModel):
     production_days: str = Field(default="", max_length=80)
     # Modelo 3D (.glb) de cada produto: {id do produto: link https}.
     model_urls: dict[str, str] = Field(default_factory=dict)
-    # Descontos (% OFF) por produto: {id do produto: porcentagem}.
-    product_discounts: dict[str, float] = Field(default_factory=dict)
-    # Promoção geral (ex.: Black Friday 10% em tudo), com datas opcionais
-    # (AAAA-MM-DD, horário de Brasília; vazio = sem limite).
-    promo_percent: float = Field(default=0, ge=0, le=90)
-    promo_label: str = Field(default="", max_length=60)
-    promo_start: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
-    promo_end: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
-    # Descontos progressivos no pedido (ex.: 20% a partir de R$ 500).
-    cart_tiers: list[CartTier] = Field(default_factory=list, max_length=5)
-    # False: vale só o maior desconto (do produto/promoção OU da faixa do pedido).
-    discounts_stack: bool = False
-
-    @field_validator("product_discounts")
-    @classmethod
-    def _valid_product_discounts(cls, value: dict[str, float]) -> dict[str, float]:
-        cleaned = {k: round(float(v), 2) for k, v in value.items() if v and float(v) > 0}
-        for pct in cleaned.values():
-            if pct > 90:
-                raise ValueError("O desconto de um produto pode ser de no máximo 90%.")
-        return cleaned
 
     @field_validator("trust_badges")
     @classmethod
@@ -845,9 +817,6 @@ class PublicProduct(BaseModel):
     price_on_request: bool = False
     # Link do modelo 3D (.glb) do produto, quando houver.
     model_url: str = ""
-    # Desconto em vigor no produto (% OFF): o maior entre o do produto e o da
-    # promoção geral ativa. `price` continua sendo o preço cheio.
-    discount_percent: float = 0
 
 
 class StorePing(BaseModel):
@@ -926,12 +895,6 @@ class PublicStoreSettings(BaseModel):
     auto_dark: bool = False
     trust_badges: list[str] = Field(default_factory=list)
     production_days: str = ""
-    # Promoção geral só aparece quando está valendo hoje.
-    promo_percent: float = 0
-    promo_label: str = ""
-    promo_end: str = ""
-    cart_tiers: list[CartTier] = Field(default_factory=list)
-    discounts_stack: bool = False
 
 
 class PublicStoreResponse(BaseModel):

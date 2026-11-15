@@ -118,7 +118,7 @@ export const ACCENTS: Record<string, Accent> = {
 };
 
 export const THEMES = {
-  light: { bg: "#faf8f5", surface: "#ffffff", ink: "#1c1917", muted: "#78716c", line: "#e7e5e4" },
+  light: { bg: "#f8e4d3", surface: "#ffffff", ink: "#1c1917", muted: "#78716c", line: "#e7e5e4" },
   dark: { bg: "#0b0b10", surface: "#15151c", ink: "#f5f5f4", muted: "#a1a1aa", line: "#2a2a33" },
   keystudio: { bg: "#0e0a07", surface: "#1a130e", ink: "#f8efe6", muted: "#c4ab97", line: "#3a2b20" },
 } as const;

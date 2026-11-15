@@ -87,6 +87,10 @@ export default function ProdutosPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const editingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    editingIdRef.current = editingId;
+  }, [editingId]);
   const [mode, setMode] = useState<"simples" | "completo">("completo");
 
   const [name, setName] = useState("");
@@ -105,6 +109,8 @@ export default function ProdutosPage() {
   const [search, setSearch] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   const formRef = useRef<HTMLFormElement>(null);
+  const [staleDraftNotice, setStaleDraftNotice] = useState(false);
+  const loadedRef = useRef<[Product[], Material[], Machine[]] | null>(null);
 
   // O formulário fica no topo da lista; ao abrir (novo ou "Editar" num
   // produto lá embaixo) leva a tela até ele, senão parece que nada aconteceu.
@@ -123,6 +129,27 @@ export default function ProdutosPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
+
+  // Um rascunho recuperado (ou um formulário aberto há muito tempo) pode
+  // apontar para um produto, máquina ou material que já foi apagado — aí a
+  // API recusa o salvar. Solta essas referências: o produto apagado vira
+  // "novo produto" e as linhas de material/máquina inexistentes saem.
+  const dropMissingReferences = useCallback(
+    (productsData: Product[], materialsData: Material[], machinesData: Machine[]) => {
+      const productIds = new Set(productsData.map((p) => p.id));
+      const materialIds = new Set(materialsData.map((m) => m.id));
+      const machineIds = new Set(machinesData.map((m) => m.id));
+      setEditingId((id) => (id && !productIds.has(id) ? null : id));
+      setStaleDraftNotice((shown) => shown || (editingIdRef.current != null && !productIds.has(editingIdRef.current)));
+      setMachineId((id) => (id && !machineIds.has(id) ? "" : id));
+      setBomLines((lines) => {
+        const kept = lines.filter((l) => !l.material_id || materialIds.has(l.material_id));
+        if (kept.length === lines.length) return lines;
+        return kept.length > 0 ? kept : [{ material_id: "", quantity_g: "" }];
+      });
+    },
+    []
+  );
 
   // Rascunho do formulário aberto: se o celular fechar o app em segundo
   // plano, o que estava preenchido volta ao reabrir.
@@ -152,9 +179,13 @@ export default function ProdutosPage() {
       setFormVisible(d.formVisible);
       setShowForm(true);
       setDraftRestored(true);
+      if (loadedRef.current) {
+        editingIdRef.current = d.editingId;
+        dropMissingReferences(...loadedRef.current);
+      }
     }, 0);
     return () => clearTimeout(id);
-  }, [currentOrganizationId, productDraftKey]);
+  }, [currentOrganizationId, productDraftKey, dropMissingReferences]);
 
   useEffect(() => {
     if (!draftChecked.current || !currentOrganizationId) return;
@@ -222,6 +253,8 @@ export default function ProdutosPage() {
       setMaterials(materialsData);
       setMachines(machinesData);
       setCostProfiles(profilesData);
+      loadedRef.current = [productsData, materialsData, machinesData];
+      dropMissingReferences(productsData, materialsData, machinesData);
 
       const defaultProfile = profilesData.find((p) => p.is_default) ?? profilesData[0];
       if (defaultProfile) {
@@ -240,7 +273,7 @@ export default function ProdutosPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, currentOrganizationId, orgPath]);
+  }, [accessToken, currentOrganizationId, orgPath, dropMissingReferences]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -401,6 +434,7 @@ export default function ProdutosPage() {
     setEditingId(null);
     setShowForm(false);
     setDraftRestored(false);
+    setStaleDraftNotice(false);
   }
 
   async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -490,7 +524,18 @@ export default function ProdutosPage() {
       });
       let productId = editingId;
       if (editingId) {
-        await apiFetch(`${orgPath}/products/${editingId}`, { method: "PATCH", accessToken, body });
+        try {
+          await apiFetch(`${orgPath}/products/${editingId}`, { method: "PATCH", accessToken, body });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404 && !products.some((p) => p.id === editingId)) {
+            // O produto em edição foi apagado: o formulário continua com tudo
+            // preenchido e o próximo "Salvar" cria um produto novo.
+            setEditingId(null);
+            setStaleDraftNotice(true);
+            throw new ApiError(404, "Esse produto tinha sido apagado. Clique em Salvar de novo para criá-lo como produto novo.");
+          }
+          throw err;
+        }
       } else {
         const created = await apiFetch<Product>(`${orgPath}/products`, { method: "POST", accessToken, body });
         productId = created.id;
@@ -855,6 +900,11 @@ export default function ProdutosPage() {
                   : "Novo produto"}
                 {draftRestored && (
                   <span className="ml-2 text-xs font-normal text-yellow-400">· rascunho recuperado</span>
+                )}
+                {staleDraftNotice && !editingId && (
+                  <span className="ml-2 text-xs font-normal text-yellow-400">
+                    · o produto que estava sendo editado foi apagado; salvar cria um novo
+                  </span>
                 )}
               </h2>
               <button type="button" onClick={resetForm} className="shrink-0 text-sm text-neutral-400 hover:underline">

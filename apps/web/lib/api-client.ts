@@ -27,6 +27,17 @@ function extractDetailMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
+const UUID_ONLY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// "Não encontrado" da API vem só com o código do item (um UUID), o que não
+// diz nada para quem está usando: troca por uma frase que explica.
+function friendlyMessage(status: number, message: string): string {
+  if (status === 404 && UUID_ONLY.test(message.trim())) {
+    return "Esse item não existe mais (foi apagado). Atualize a página e tente de novo.";
+  }
+  return message;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { accessToken?: string | null } = {}
@@ -46,7 +57,7 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    throw new ApiError(response.status, extractDetailMessage(errorBody, response.statusText));
+    throw new ApiError(response.status, friendlyMessage(response.status, extractDetailMessage(errorBody, response.statusText)));
   }
   if (response.status === 204) {
     return undefined as T;

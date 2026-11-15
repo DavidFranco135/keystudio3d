@@ -5,12 +5,12 @@ const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans", di
 const display = Fraunces({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Catálogo",
-  description: "Catálogo de produtos com pedido direto pelo WhatsApp.",
-  manifest: undefined,
+  title: "KeyStudio3D · Loja",
+  description: "Peças em impressão 3D sob medida: catálogo completo e pedido direto pelo WhatsApp, sem cadastro.",
+  manifest: "/manifest-loja.json",
   openGraph: {
-    title: "Catálogo",
-    description: "Catálogo de produtos com pedido direto pelo WhatsApp.",
+    title: "KeyStudio3D · Loja",
+    description: "Peças em impressão 3D sob medida: catálogo completo e pedido direto pelo WhatsApp, sem cadastro.",
     images: [{ url: "/brand/keystudio3d-logo.png", width: 1000, height: 916 }],
   },
 };

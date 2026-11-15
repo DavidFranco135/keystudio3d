@@ -42,6 +42,14 @@ export type StoreSettings = {
   product_order: string[];
   price_on_request_product_ids: string[];
   categories: StoreCategory[];
+  // Vitrine segue o modo escuro do celular/computador do cliente.
+  auto_dark?: boolean;
+  // Selos de confiança (vitrine, pedido e rodapé).
+  trust_badges?: string[];
+  // Prazo de produção mostrado na vitrine (ex.: "7 a 10 dias úteis").
+  production_days?: string;
+  // Modelo 3D (.glb) de cada produto: {id do produto: link https}.
+  model_urls?: Record<string, string>;
 };
 
 export type StoreAdminResponse = { slug: string; name: string; settings: StoreSettings };
@@ -59,6 +67,8 @@ export type PublicProduct = {
   featured: boolean;
   category_ids: string[];
   price_on_request: boolean;
+  // Link do modelo 3D (.glb), quando houver.
+  model_url?: string;
 };
 
 export type PublicStore = {
@@ -71,6 +81,7 @@ export type PublicStore = {
     | "product_order"
     | "price_on_request_product_ids"
     | "categories"
+    | "model_urls"
   > & {
     categories: PublicCategory[];
     // Destaques visíveis, já na ordem escolhida (servidores antigos não mandam).
@@ -122,6 +133,15 @@ export const THEMES = {
   dark: { bg: "#0b0b10", surface: "#15151c", ink: "#f5f5f4", muted: "#a1a1aa", line: "#2a2a33" },
   keystudio: { bg: "#0e0a07", surface: "#1a130e", ink: "#f8efe6", muted: "#c4ab97", line: "#3a2b20" },
 } as const;
+
+// Tema efetivamente desenhado na vitrine.
+export type RenderTheme = StoreTheme;
+
+// Modo escuro automático: qual tema usar quando o aparelho está no escuro
+// (o preto e cobre da marca).
+export function darkVariant(theme: StoreTheme): RenderTheme {
+  return theme === "light" ? "keystudio" : theme;
+}
 
 function rgba(hex: string, alpha: number): string {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -221,3 +241,28 @@ export function refreshPublicStoreCache(slug: string | undefined): void {
 // Condição de pagamento da KeyStudio3D: aparece na faixa do topo da loja e
 // nas condições gerais do PDF do pedido.
 export const PAYMENT_TERMS = "Pagamento: 50% na confirmação do pedido e 50% antes da entrega ou envio.";
+
+// Prazo de produção: "7 a 10 dias úteis" → data em que fica pronto pedindo
+// hoje (usa o maior número; "úteis" pula sábado e domingo). Sem número, null.
+export function productionReadyDate(text: string | undefined, from = new Date()): Date | null {
+  const nums = (text ?? "").match(/\d+/g);
+  if (!nums) return null;
+  const days = Math.max(...nums.map(Number));
+  if (!Number.isFinite(days) || days <= 0 || days > 365) return null;
+  const businessOnly = /[uú]te(is|l)/i.test(text ?? "");
+  const date = new Date(from);
+  let left = days;
+  while (left > 0) {
+    date.setDate(date.getDate() + 1);
+    const wd = date.getDay();
+    if (businessOnly && (wd === 0 || wd === 6)) continue;
+    left -= 1;
+  }
+  return date;
+}
+
+export function formatReadyDate(date: Date): string {
+  return date
+    .toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })
+    .replace(".", "");
+}

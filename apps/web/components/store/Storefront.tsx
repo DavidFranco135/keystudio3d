@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
-import { PAYMENT_TERMS, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
+import { PAYMENT_TERMS, darkVariant, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
 import { trackStoreEvent, useVisitTracker } from "@/lib/visits";
@@ -31,6 +31,15 @@ import {
   useSwipe,
 } from "./ui";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
+import {
+  InstallAppButton,
+  ProductionEta,
+  TrustBadges,
+  pickRelated,
+  productLink,
+  usePrefersDark,
+  useStoreServiceWorker,
+} from "./extras";
 
 const TABS = ["Início", "Catálogo", "Como pedir", "Contato"] as const;
 
@@ -182,18 +191,44 @@ function SectionTitle({
   );
 }
 
+// Esqueleto com o formato da loja (cabeçalho, capa, busca e cards com texto)
+// enquanto os dados chegam: a página "aparece" na hora, sem tela vazia.
+function Shimmer({ className = "" }: { className?: string }) {
+  return (
+    <div className={`relative overflow-hidden bg-[var(--line)] ${className}`}>
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+    </div>
+  );
+}
+
 function SkeletonStore() {
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
-      <div className="relative h-[52vh] overflow-hidden rounded-[28px] bg-[var(--line)]">
-        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+    <div aria-busy="true" aria-label="Carregando a loja">
+      <div className="h-8 bg-[var(--line)] opacity-60" />
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-3">
+          <Shimmer className="h-11 w-11 rounded-2xl" />
+          <Shimmer className="h-4 w-28 rounded-full" />
+        </div>
+        <Shimmer className="hidden h-10 w-80 rounded-full md:block" />
+        <Shimmer className="h-10 w-24 rounded-full" />
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-[var(--line)]">
-            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-          </div>
-        ))}
+      <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 sm:px-6">
+        <Shimmer className="h-[46vh] rounded-[28px]" />
+        <Shimmer className="h-14 rounded-full" />
+        <Shimmer className="h-8 w-56 rounded-full" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-3 overflow-hidden rounded-3xl border border-[var(--line)] pb-4">
+              <Shimmer className="aspect-[4/5]" />
+              <Shimmer className="mx-4 h-3.5 w-3/4 rounded-full" />
+              <div className="mx-4 flex items-center justify-between">
+                <Shimmer className="h-5 w-16 rounded-full" />
+                <Shimmer className="h-9 w-20 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -244,6 +279,35 @@ export function Storefront({ slug }: { slug: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   useStoreFx(rootRef, store !== null);
+  useStoreServiceWorker();
+  const prefersDark = usePrefersDark();
+
+  // Link direto do produto (?p=<id>): abre o produto assim que a loja carrega.
+  // O ?p= sai do endereço de base para "voltar" não reabrir o mesmo produto.
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (!store || deepLinkDone.current) return;
+    deepLinkDone.current = true;
+    const url = new URL(window.location.href);
+    const wanted = url.searchParams.get("p");
+    if (!wanted) return;
+    url.searchParams.delete("p");
+    window.history.replaceState(window.history.state, "", url.toString());
+    if (store.products.some((p) => p.id === wanted)) setTimeout(() => setOpenProductId(wanted), 0);
+  }, [store]);
+
+  // Produto aberto: o endereço vira o link do produto (para copiar/compartilhar)
+  // e o título da aba mostra o nome dele.
+  useEffect(() => {
+    if (!openProductId || !store) return;
+    const product = store.products.find((p) => p.id === openProductId);
+    window.history.replaceState(window.history.state, "", productLink(openProductId));
+    const previous = document.title;
+    if (product) document.title = `${product.name} · ${store.settings.display_name || store.name}`;
+    return () => {
+      document.title = previous;
+    };
+  }, [openProductId, store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -437,7 +501,10 @@ export function Storefront({ slug }: { slug: string }) {
   }
 
   const settings = store?.settings;
-  const vars = themeVars(settings?.accent ?? "indigo", settings?.theme ?? "light");
+  // Modo escuro automático: no celular/computador escuro, usa o preto e cobre.
+  const effectiveTheme =
+    settings?.auto_dark && prefersDark ? darkVariant(settings.theme) : (settings?.theme ?? "light");
+  const vars = themeVars(settings?.accent ?? "indigo", effectiveTheme);
 
   if (!store || !settings) {
     return (
@@ -542,10 +609,16 @@ export function Storefront({ slug }: { slug: string }) {
     <div
       style={vars}
       ref={rootRef}
-      className="store-fx min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
+      className="store-fx fx-texture min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
     >
       <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
-        <AnnouncementBar items={[PAYMENT_TERMS, "Pedidos pelo WhatsApp, sem cadastro"]} />
+        <AnnouncementBar
+          items={[
+            PAYMENT_TERMS,
+            "Pedidos pelo WhatsApp, sem cadastro",
+            ...(settings.production_days?.trim() ? [`Prazo de produção: ${settings.production_days.trim()}`] : []),
+          ]}
+        />
         <div className="fx-head-row mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button onClick={() => goTab(0)} className="flex min-w-0 items-center gap-3 text-left">
             {settings.logo_url ? (
@@ -640,6 +713,8 @@ export function Storefront({ slug }: { slug: string }) {
                   </span>
                 </button>
 
+                <TrustBadges badges={settings.trust_badges} />
+
                 {featuredProducts.length > 0 && (
                   <section className="space-y-6">
                     <SectionTitle
@@ -697,6 +772,12 @@ export function Storefront({ slug }: { slug: string }) {
                     ))}
                   </div>
                 </section>
+              )}
+
+              {settings.production_days?.trim() && (
+                <Reveal>
+                  <ProductionEta text={settings.production_days} />
+                </Reveal>
               )}
 
               {settings.highlights.some((h) => h.title) && (
@@ -846,7 +927,10 @@ export function Storefront({ slug }: { slug: string }) {
                   Nenhum produto encontrado.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+                <div
+                  key={`${category ?? "todas"}-${sort}-${onlyAvailable}`}
+                  className="fx-grid-in grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4"
+                >
                   {filtered.map((p, i) => (
                     <div
                       key={p.id}
@@ -994,8 +1078,12 @@ export function Storefront({ slug }: { slug: string }) {
         </div>
       </main>
 
-      <footer className="border-t border-[var(--line)] py-8 text-center text-xs text-[var(--muted)]">
-        © {new Date().getFullYear()} {storeName}. Todos os direitos reservados.
+      <footer className="space-y-4 border-t border-[var(--line)] px-4 py-8 text-center text-xs text-[var(--muted)]">
+        <TrustBadges badges={settings.trust_badges} variant="compact" className="justify-center" />
+        <InstallAppButton storeName={storeName} className="flex flex-col items-center" />
+        <p>
+          © {new Date().getFullYear()} {storeName}. Todos os direitos reservados.
+        </p>
       </footer>
 
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
@@ -1039,8 +1127,11 @@ export function Storefront({ slug }: { slug: string }) {
 
       {openProduct && (
         <ProductModal
-          key={openProduct.id}
           product={openProduct}
+          related={pickRelated(openProduct, store.products)}
+          onOpenProduct={setOpenProductId}
+          productionDays={settings.production_days}
+          shareUrl={productLink(openProduct.id)}
           line={lines.find((l) => l.id === openProduct.id)}
           storeName={storeName}
           whatsapp={settings.whatsapp}
@@ -1069,6 +1160,8 @@ export function Storefront({ slug }: { slug: string }) {
         onClear={() => setLines([])}
         onBrowse={() => goTab(1)}
         onSent={() => showToast("Abrindo o WhatsApp…")}
+        badges={settings.trust_badges}
+        productionDays={settings.production_days}
       />
     </div>
     </>

@@ -140,6 +140,7 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
                 featured=str(product.id) in featured,
                 category_ids=categories_of.get(str(product.id), []),
                 price_on_request=hide_price,
+                model_url=settings.model_urls.get(str(product.id), ""),
             )
         )
 
@@ -176,6 +177,9 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
             highlights=settings.highlights,
             categories=public_categories,
             featured_product_ids=featured_ordered,
+            auto_dark=settings.auto_dark,
+            trust_badges=settings.trust_badges,
+            production_days=settings.production_days,
         ),
         products=products,
     )

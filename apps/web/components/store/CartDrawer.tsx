@@ -8,6 +8,7 @@ import { focusStyle } from "@/lib/focus";
 import { useOverlayHistory } from "@/lib/use-overlay-history";
 import { IconClose, IconMinus, IconPlus, IconTrash, IconWhatsapp } from "./ui";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
+import { ProductionEta, TrustBadges } from "./extras";
 
 export type CustomerInfo = { name: string; extra: string };
 
@@ -25,6 +26,8 @@ export function CartDrawer({
   onClear,
   onBrowse,
   onSent,
+  badges,
+  productionDays,
 }: {
   open: boolean;
   lines: OrderLine[];
@@ -39,6 +42,8 @@ export function CartDrawer({
   onClear: () => void;
   onBrowse: () => void;
   onSent: () => void;
+  badges?: string[];
+  productionDays?: string;
 }) {
   useOverlayHistory(open, onClose);
 
@@ -206,6 +211,7 @@ export function CartDrawer({
               {anyOnRequest && total > 0 && (
                 <p className="-mt-2 text-right text-xs text-[var(--muted)]">+ itens com preço a consultar</p>
               )}
+              <ProductionEta text={productionDays} variant="inline" className="text-xs" />
               <a
                 href={href}
                 target="_blank"
@@ -225,6 +231,7 @@ export function CartDrawer({
               <p className="text-center text-[11px] text-[var(--muted)]">
                 O valor final e o prazo são confirmados com você no WhatsApp.
               </p>
+              <TrustBadges badges={badges} variant="compact" className="justify-center text-[var(--muted)]" />
             </footer>
           </>
         )}

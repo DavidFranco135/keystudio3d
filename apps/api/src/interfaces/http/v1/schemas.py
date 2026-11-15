@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from src.domain.auth.roles import Role
 
@@ -757,6 +757,42 @@ class StoreSettings(BaseModel):
     # Produtos exibidos como "Preço a consultar" na loja pública.
     price_on_request_product_ids: list[str] = Field(default_factory=list)
     categories: list[StoreCategory] = Field(default_factory=list, max_length=30)
+    # Segue o modo escuro do celular/computador do cliente na vitrine.
+    auto_dark: bool = False
+    # Selos de confiança mostrados na vitrine e no pedido.
+    trust_badges: list[str] = Field(
+        default_factory=lambda: [
+            "Impressão 3D sob medida",
+            "Envio para todo o Brasil",
+            "Pagamento combinado no WhatsApp",
+        ],
+        max_length=6,
+    )
+    # Prazo de produção mostrado na vitrine (ex.: "7 a 10 dias úteis"). Vazio = não mostra.
+    production_days: str = Field(default="", max_length=80)
+    # Modelo 3D (.glb) de cada produto: {id do produto: link https}.
+    model_urls: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("trust_badges")
+    @classmethod
+    def _clean_badges(cls, value: list[str]) -> list[str]:
+        cleaned = [b.strip() for b in value if b.strip()]
+        for badge in cleaned:
+            if len(badge) > 60:
+                raise ValueError("Cada selo pode ter no máximo 60 letras.")
+        return cleaned
+
+    @field_validator("model_urls")
+    @classmethod
+    def _only_https_models(cls, value: dict[str, str]) -> dict[str, str]:
+        cleaned = {k: v.strip() for k, v in value.items() if v and v.strip()}
+        if len(cleaned) > 500:
+            raise ValueError("Modelos 3D demais.")
+        for link in cleaned.values():
+            bad = not link.startswith("https://") or any(c.isspace() for c in link)
+            if len(link) > 2000 or bad:
+                raise ValueError(f"Link do modelo 3D inválido: {link[:80]}")
+        return cleaned
 
 
 class StoreAdminResponse(BaseModel):
@@ -779,6 +815,8 @@ class PublicProduct(BaseModel):
     category_ids: list[str] = Field(default_factory=list)
     # Quando True, `price` vem 0 — o valor real não é exposto publicamente.
     price_on_request: bool = False
+    # Link do modelo 3D (.glb) do produto, quando houver.
+    model_url: str = ""
 
 
 class StorePing(BaseModel):
@@ -854,6 +892,9 @@ class PublicStoreSettings(BaseModel):
     categories: list[PublicCategory] = Field(default_factory=list)
     # Ids dos destaques visíveis, já na ordem escolhida pelo lojista.
     featured_product_ids: list[str] = Field(default_factory=list)
+    auto_dark: bool = False
+    trust_badges: list[str] = Field(default_factory=list)
+    production_days: str = ""
 
 
 class PublicStoreResponse(BaseModel):

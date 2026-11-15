@@ -431,6 +431,7 @@ export default function LojaAdminPage() {
         ...settings,
         whatsapp: normalizeWhatsapp(settings.whatsapp) || DEFAULT_WHATSAPP,
         highlights: settings.highlights.filter((h) => h.title.trim() || h.text.trim()),
+        trust_badges: (settings.trust_badges ?? []).map((b) => b.trim()).filter(Boolean),
         // Só grava a ordem se o lojista reordenou; assim ids apagados saem da lista.
         product_order: settings.product_order.length > 0 ? orderedProducts.map((p) => p.id) : [],
         categories: settings.categories
@@ -747,6 +748,70 @@ export default function LojaAdminPage() {
                   </p>
                 )}
               </div>
+            </Card>
+
+            <Card
+              title="Confiança, prazo e aparência"
+              hint="Selos que passam segurança ao cliente, o prazo de produção (aparece na página inicial, no produto e no pedido) e o modo escuro automático."
+            >
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-500">Selos de confiança (até 6) — ex.: Feito à mão · Envio para todo o Brasil</p>
+                {(settings.trust_badges ?? []).map((badge, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      className={input}
+                      value={badge}
+                      maxLength={60}
+                      placeholder="Ex.: Envio para todo o Brasil"
+                      onChange={(e) =>
+                        update({
+                          trust_badges: (settings.trust_badges ?? []).map((b, j) => (j === i ? e.target.value : b)),
+                        })
+                      }
+                    />
+                    <button
+                      onClick={() => update({ trust_badges: (settings.trust_badges ?? []).filter((_, j) => j !== i) })}
+                      className="rounded border border-red-900 px-3 py-2 text-xs text-red-400 hover:bg-red-950"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {(settings.trust_badges ?? []).length < 6 && (
+                  <button
+                    onClick={() => update({ trust_badges: [...(settings.trust_badges ?? []), ""] })}
+                    className="text-sm text-blue-400 hover:underline"
+                  >
+                    + Adicionar selo
+                  </button>
+                )}
+              </div>
+              <label className="block space-y-1">
+                <span className="text-xs text-neutral-500">
+                  Prazo de produção — ex.: “7 a 10 dias úteis”. A loja calcula a data: “pedidos feitos hoje ficam prontos até …”. Vazio = não mostra.
+                </span>
+                <input
+                  className={input}
+                  value={settings.production_days ?? ""}
+                  maxLength={80}
+                  placeholder="7 a 10 dias úteis"
+                  onChange={(e) => update({ production_days: e.target.value })}
+                />
+              </label>
+              <label className="flex items-start gap-3 rounded-lg border border-neutral-800 p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={!!settings.auto_dark}
+                  onChange={(e) => update({ auto_dark: e.target.checked })}
+                />
+                <span>
+                  <span className="block text-sm">Modo escuro automático</span>
+                  <span className="block text-xs text-neutral-500">
+                    Quando o celular ou computador do cliente estiver no modo escuro, a loja abre no tema escuro preto e cobre.
+                  </span>
+                </span>
+              </label>
             </Card>
 
             <Card

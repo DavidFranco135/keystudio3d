@@ -105,6 +105,8 @@ export default function ProdutosPage() {
   const [stockQuantity, setStockQuantity] = useState("");
   const [formCategoryIds, setFormCategoryIds] = useState<string[]>([]);
   const [formPriceOnRequest, setFormPriceOnRequest] = useState(false);
+  // Link do modelo 3D (.glb) mostrado no "Ver em 3D" da loja.
+  const [formModelUrl, setFormModelUrl] = useState("");
   const [formVisible, setFormVisible] = useState(true);
   const [search, setSearch] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
@@ -429,6 +431,7 @@ export default function ProdutosPage() {
     setStockQuantity("");
     setFormCategoryIds([]);
     setFormPriceOnRequest(false);
+    setFormModelUrl("");
     setFormVisible(true);
     setMode("completo");
     setEditingId(null);
@@ -496,6 +499,7 @@ export default function ProdutosPage() {
     setStockQuantity(product.stock_quantity != null ? String(product.stock_quantity) : "");
     setFormCategoryIds(categories.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id));
     setFormPriceOnRequest(storeSettings?.price_on_request_product_ids?.includes(product.id) ?? false);
+    setFormModelUrl(storeSettings?.model_urls?.[product.id] ?? "");
     setFormVisible(!(storeSettings?.hidden_product_ids ?? []).includes(product.id));
     setMode(product.manual_price != null ? "simples" : "completo");
     setShowForm(true);
@@ -549,6 +553,14 @@ export default function ProdutosPage() {
           patch.price_on_request_product_ids = formPriceOnRequest
             ? [...onRequest, productId]
             : onRequest.filter((id) => id !== productId);
+        }
+        const models = storeSettings.model_urls ?? {};
+        const modelUrl = formModelUrl.trim();
+        if ((models[productId] ?? "") !== modelUrl) {
+          const nextModels = { ...models };
+          if (modelUrl) nextModels[productId] = modelUrl;
+          else delete nextModels[productId];
+          patch.model_urls = nextModels;
         }
         const hiddenNow = storeSettings.hidden_product_ids ?? [];
         if (hiddenNow.includes(productId) === formVisible) {
@@ -1026,6 +1038,23 @@ export default function ProdutosPage() {
                     O cliente vê “Preço a consultar” em vez do valor e combina pelo WhatsApp.
                   </span>
                 </span>
+              </label>
+            )}
+
+            {storeSettings && (
+              <label className="block space-y-1">
+                <span className="block text-xs text-neutral-500">
+                  Modelo 3D (opcional) — link https de um arquivo .glb. Na loja aparece o botão “Ver em 3D”, com
+                  giro e zoom (e realidade aumentada no celular).
+                </span>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={formModelUrl}
+                  onChange={(e) => setFormModelUrl(e.target.value)}
+                  placeholder="https://…/modelo.glb"
+                  className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm placeholder:text-neutral-600"
+                />
               </label>
             )}
 

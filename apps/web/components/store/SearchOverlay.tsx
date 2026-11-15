@@ -69,7 +69,7 @@ export function SearchOverlay({
       >
         <div className="flex items-center gap-2 border-b border-[var(--line)] p-3 sm:p-4">
           <div className="relative flex-1">
-            <IconSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--accent)]" />
+            <IconSearch className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--accent-text)]" />
             <input
               ref={inputRef}
               value={term}
@@ -150,7 +150,7 @@ export function SearchOverlay({
                         {p.name}
                       </span>
                       <span
-                        className={`block text-sm ${p.price_on_request ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}
+                        className={`block text-sm ${p.price_on_request ? "text-[var(--accent-text)]" : "text-[var(--muted)]"}`}
                       >
                         {priceLabel(p)}
                         {!p.available ? " · Esgotado" : ""}

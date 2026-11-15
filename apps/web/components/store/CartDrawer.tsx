@@ -125,7 +125,7 @@ export function CartDrawer({
                           style={focusStyle(product.photo_focus, product.photo_urls[0])}
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--accent)] opacity-40">
+                        <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--accent-text)] opacity-40">
                           {product.name.slice(0, 1)}
                         </div>
                       )}

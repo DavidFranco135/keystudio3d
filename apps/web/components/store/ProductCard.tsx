@@ -40,7 +40,7 @@ export function ProductCard({
             }`}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center font-[family-name:var(--font-display)] text-6xl text-[var(--accent)] opacity-40">
+          <div className="flex h-full w-full items-center justify-center font-[family-name:var(--font-display)] text-6xl text-[var(--accent-text)] opacity-40">
             {product.name.slice(0, 1).toUpperCase()}
           </div>
         )}
@@ -79,7 +79,7 @@ export function ProductCard({
 
         <div className="mt-auto flex flex-col gap-2.5 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
           {product.price_on_request ? (
-            <p className="text-sm font-semibold text-[var(--accent)]">{priceLabel(product)}</p>
+            <p className="text-sm font-semibold text-[var(--accent-text)]">{priceLabel(product)}</p>
           ) : (
             <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
               {priceLabel(product)}

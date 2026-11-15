@@ -90,16 +90,23 @@ type Accent = {
   // Cor mostrada no seletor de "Minha Loja" (quando difere de `color`).
   swatch?: string;
   // Variante para o tema escuro, quando a cor do tema claro não funciona lá.
-  dark?: { color: string; ink: string };
+  dark?: { color: string; ink: string };  // Texto sobre o botão no tema claro (padrão: branco).
+  ink?: string;
+  // Cor de textos soltos (links, títulos pequenos) no tema claro, quando a cor
+  // do botão é clara demais para ser lida sobre o fundo claro.
+  text?: string;
 };
 
 export const ACCENTS: Record<string, Accent> = {
-  // Cobre claro da logo KeyStudio3D (#edb48a). No tema claro usa um cobre
-  // escuro, porque o tom da logo não tem contraste sobre fundo claro.
+  // Cobre claro da logo KeyStudio3D (#edb48a), nos temas claro e escuro.
   copper: {
     label: "Cobre KeyStudio",
-    color: "#9a4f22",
-    soft: "#fbf1ea",
+    // Botões no cobre claro da logo, com texto escuro; textos soltos num cobre
+    // mais forte, para serem lidos sobre o fundo claro.
+    color: "#edb48a",
+    ink: "#1a0f08",
+    text: "#a65a2a",
+    soft: "#fbefe5",
     swatch: "#edb48a",
     dark: { color: "#edb48a", ink: "#1a0f08" },
   },
@@ -127,7 +134,8 @@ export function themeVars(accent: string, theme: StoreTheme): React.CSSPropertie
   const t = THEMES[theme] ?? THEMES.light;
   const isDark = theme === "dark" || theme === "keystudio";
   const color = isDark && a.dark ? a.dark.color : a.color;
-  const ink = isDark && a.dark ? a.dark.ink : "#ffffff";
+  const ink = isDark && a.dark ? a.dark.ink : (a.ink ?? "#ffffff");
+  const text = isDark ? color : (a.text ?? color);
   return {
     "--bg": t.bg,
     "--surface": t.surface,
@@ -136,6 +144,7 @@ export function themeVars(accent: string, theme: StoreTheme): React.CSSPropertie
     "--line": t.line,
     "--accent": color,
     "--accent-ink": ink,
+    "--accent-text": text,
     "--bg-glass": rgba(t.bg, 0.82),
     "--surface-glass": rgba(t.surface, 0.82),
     "--accent-ring": rgba(color, 0.22),

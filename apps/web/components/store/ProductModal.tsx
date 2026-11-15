@@ -98,7 +98,7 @@ export function ProductModal({
                 />
               ))
             ) : (
-              <div className="flex h-full w-full items-center justify-center font-[family-name:var(--font-display)] text-8xl text-[var(--accent)] opacity-30">
+              <div className="flex h-full w-full items-center justify-center font-[family-name:var(--font-display)] text-8xl text-[var(--accent-text)] opacity-30">
                 {product.name.slice(0, 1).toUpperCase()}
               </div>
             )}
@@ -139,7 +139,7 @@ export function ProductModal({
         <div className="flex flex-col gap-5 p-6 sm:p-8">
           <div className="space-y-2 pr-8">
             {product.featured && (
-              <span className="fx-shine inline-block rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+              <span className="fx-shine inline-block rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-text)]">
                 Destaque
               </span>
             )}
@@ -147,7 +147,7 @@ export function ProductModal({
               {product.name}
             </h2>
             <p
-              className={`font-[family-name:var(--font-display)] font-semibold text-[var(--accent)] ${
+              className={`font-[family-name:var(--font-display)] font-semibold text-[var(--accent-text)] ${
                 product.price_on_request ? "text-2xl" : "text-3xl"
               }`}
             >

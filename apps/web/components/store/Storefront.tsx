@@ -1078,12 +1078,102 @@ export function Storefront({ slug }: { slug: string }) {
         </div>
       </main>
 
-      <footer className="space-y-4 border-t border-[var(--line)] px-4 py-8 text-center text-xs text-[var(--muted)]">
-        <TrustBadges badges={settings.trust_badges} variant="compact" className="justify-center" />
-        <InstallAppButton storeName={storeName} className="flex flex-col items-center" />
-        <p>
-          © {new Date().getFullYear()} {storeName}. Todos os direitos reservados.
-        </p>
+      {/* Rodapé no preto e cobre da marca, em qualquer tema. */}
+      <footer className="border-t border-[#3a2b20] bg-[#0e0a07] pb-28 text-sm text-[#c4ab97] sm:pb-10">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+          <div className="space-y-3">
+            <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[#f8efe6]">{storeName}</p>
+            {settings.tagline && <p className="leading-relaxed">{settings.tagline}</p>}
+            <p className="leading-relaxed">Peças criadas sob medida, do projeto à impressão e ao acabamento.</p>
+          </div>
+
+          <nav aria-label="Navegação" className="space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#edb48a]">Loja</p>
+            <ul className="space-y-2">
+              {TABS.map((label, i) => (
+                <li key={label}>
+                  <button
+                    onClick={() => goTab(i)}
+                    className="underline-offset-4 transition hover:text-[#f8efe6] hover:underline"
+                  >
+                    {label}
+                  </button>
+                </li>
+              ))}
+              <li>
+                <a
+                  href={whatsappLink(settings.whatsapp, `Olá, ${storeName}! Gostaria de uma peça personalizada.`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-4 transition hover:text-[#f8efe6] hover:underline"
+                >
+                  Peças personalizadas
+                </a>
+              </li>
+            </ul>
+          </nav>
+
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#edb48a]">Atendimento</p>
+            <ul className="space-y-2">
+              <li>
+                <a
+                  href={waGeneral}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 underline-offset-4 transition hover:text-[#f8efe6] hover:underline"
+                >
+                  <IconWhatsapp className="h-4 w-4" />
+                  {formatWhatsappDisplay(settings.whatsapp)}
+                </a>
+              </li>
+              {settings.instagram && (
+                <li>
+                  <a
+                    href={`https://instagram.com/${settings.instagram.replace(/^@/, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 underline-offset-4 transition hover:text-[#f8efe6] hover:underline"
+                  >
+                    <IconInstagram className="h-4 w-4" />@{settings.instagram.replace(/^@/, "")}
+                  </a>
+                </li>
+              )}
+              {settings.hours && <li className="whitespace-pre-line">{settings.hours}</li>}
+              {settings.address && <li className="whitespace-pre-line">{settings.address}</li>}
+            </ul>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#edb48a]">Compra e entrega</p>
+            <ul className="space-y-2 leading-relaxed">
+              <li>Pedido enviado pelo WhatsApp, sem cadastro.</li>
+              <li>
+                {settings.production_days?.trim()
+                  ? `Produção em ${settings.production_days.trim()}, conforme a quantidade de peças.`
+                  : "Prazo de produção combinado no WhatsApp, conforme a quantidade de peças."}
+              </li>
+              <li>{PAYMENT_TERMS}</li>
+              <li>Frete e prazo de entrega combinados no WhatsApp para a sua região.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 pb-8 sm:px-6">
+          <TrustBadges badges={settings.trust_badges} variant="compact" className="justify-center text-[#f8efe6]" />
+          <InstallAppButton storeName={storeName} className="flex flex-col items-center text-[#f8efe6]" />
+        </div>
+
+        <div className="border-t border-[#3a2b20]">
+          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs sm:flex-row sm:px-6">
+            <p>
+              © {new Date().getFullYear()} {storeName}. Todos os direitos reservados.
+            </p>
+            <p>
+              Produzido por <span className="font-semibold tracking-[0.15em] text-[#f8efe6]">NIKLAUS</span>
+            </p>
+          </div>
+        </div>
       </footer>
 
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">

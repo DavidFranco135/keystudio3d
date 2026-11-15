@@ -43,6 +43,14 @@ import {
 
 const TABS = ["Início", "Catálogo", "Como pedir", "Contato"] as const;
 
+// "Quem somos": o mesmo texto da arte (public/brand/quem-somos-keyla.jpg),
+// usado como descrição da foto e, no celular, abaixo dela.
+const QUEM_SOMOS_PARAGRAPHS = [
+  "Olá! Sou a Keyla, esposa do David, e juntos começamos a Key Studio 3D, um projeto que nasceu do nosso desejo de transformar ideias em realidade. Trabalhamos com impressão 3D, criando produtos personalizados, criativos e feitos para tornar cada detalhe especial.",
+  "Aqui, cada ideia ganha forma e cada criação carrega um pouquinho de nós. Seja bem-vindo(a) ao nosso mundo!",
+];
+const QUEM_SOMOS_TEXT = `Oi, prazer! Eu sou a Keyla. ${QUEM_SOMOS_PARAGRAPHS.join(" ")}`;
+
 function useStoredState<T>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const loaded = useRef(false);
@@ -773,6 +781,48 @@ export function Storefront({ slug }: { slug: string }) {
                   </div>
                 </section>
               )}
+
+              <Reveal>
+                <section className="space-y-6" aria-labelledby="quem-somos">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-text)]">
+                      Quem somos
+                    </p>
+                    <h2
+                      id="quem-somos"
+                      className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl"
+                    >
+                      Prazer, KeyStudio3D
+                    </h2>
+                  </div>
+                  {/* Foto inteira (sem corte): o texto faz parte da arte. No
+                      celular, toque abre em tamanho grande e o texto também
+                      aparece abaixo, para ler sem ampliar. */}
+                  <a
+                    href="/brand/quem-somos-keyla.jpg"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block overflow-hidden rounded-[28px] border border-[var(--line)] shadow-[0_24px_60px_-30px_rgba(0,0,0,0.45)] transition duration-500 hover:-translate-y-1"
+                  >
+                    <picture>
+                      <source srcSet="/brand/quem-somos-keyla.webp" type="image/webp" />
+                      <img
+                        src="/brand/quem-somos-keyla.jpg"
+                        alt={QUEM_SOMOS_TEXT}
+                        width={1600}
+                        height={1066}
+                        loading="lazy"
+                        className="block h-auto w-full"
+                      />
+                    </picture>
+                  </a>
+                  <div className="space-y-3 text-sm leading-relaxed text-[var(--muted)] sm:hidden">
+                    {QUEM_SOMOS_PARAGRAPHS.map((t) => (
+                      <p key={t}>{t}</p>
+                    ))}
+                  </div>
+                </section>
+              </Reveal>
 
               {settings.production_days?.trim() && (
                 <Reveal>

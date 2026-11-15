@@ -1141,7 +1141,7 @@ export default function PedidosPage() {
                       Produtos ({(order.items ?? []).length})
                     </button>
                     <button onClick={() => setPdfOrderId(order.id)} className="text-amber-400 hover:underline">
-                      Gerar PDF
+                      PDF · Recibo · WhatsApp
                     </button>
                     <button onClick={() => handleDeleteOrder(order)} className="text-red-400 hover:underline">
                       Excluir

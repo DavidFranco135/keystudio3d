@@ -9,12 +9,48 @@ import {
   DEFAULT_PAYMENT,
   EMPTY_SUPPLIER,
   PAYMENT_METHODS,
-  downloadOrderPdf,
+  buildOrderPdf,
+  buildReceiptPdf,
   orderNumber,
+  pdfFileName,
+  receiptFileName,
+  receiptKind,
+  sharePdfOnWhatsapp,
   type CompanyInfo,
   type PaymentInfo,
+  type ReceiptInfo,
   type SupplierInfo,
 } from "@/lib/order-pdf";
+
+// Recibos já emitidos de cada pedido (neste aparelho): somam o "já recebido".
+type ReceiptRecord = { date: string; amount: number; method: string };
+const RECEIPTS_KEY = (orderId: string) => `pedido-recibos:${orderId}`;
+
+function readReceipts(orderId: string): ReceiptRecord[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECEIPTS_KEY(orderId)) || "[]") as ReceiptRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function saveReceipt(orderId: string, r: ReceiptRecord) {
+  try {
+    localStorage.setItem(RECEIPTS_KEY(orderId), JSON.stringify([...readReceipts(orderId), r]));
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// "1.234,56" ou "1234,56" ou "1234.56" → 1234.56
+const num = (v: string) =>
+  Math.max(0, Number(v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v) || 0);
+const money = (v: number) => (v ? v.toFixed(2).replace(".", ",") : "");
 
 // Forma de pagamento escolhida fica salva neste navegador, por pedido, e a
 // última usada vira o padrão do próximo PDF.
@@ -128,6 +164,18 @@ export function OrderPdfDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isQuote = order.status === "quote";
+  // "pedido": PDF do pedido/orçamento. "recibo": recibo de pagamento.
+  const [mode, setMode] = useState<"pedido" | "recibo">("pedido");
+  const [receivedNow, setReceivedNow] = useState("");
+  const [receivedBefore, setReceivedBefore] = useState("");
+  const [receiptDate, setReceiptDate] = useState(todayIso);
+  const [receiptNote, setReceiptNote] = useState("");
+  const [history, setHistory] = useState<ReceiptRecord[]>([]);
+  // PDF pronto esperando um toque para abrir o "Compartilhar" do celular.
+  const [pendingShare, setPendingShare] = useState<{ blob: Blob; name: string; text: string; save: () => void } | null>(
+    null
+  );
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     const p = readPref(order.id);
@@ -138,6 +186,9 @@ export function OrderPdfDialog({
       setShowSupplier(!supplier.name.trim() || !supplier.document.trim());
       setDiscount(p.discount ? String(p.discount) : "");
       setShipping(p.shipping ? String(p.shipping) : "");
+      const past = readReceipts(order.id);
+      setHistory(past);
+      setReceivedBefore(money(past.reduce((sum, r) => sum + r.amount, 0)));
     }, 0);
     return () => clearTimeout(id);
   }, [order.id, orgId]);
@@ -164,18 +215,100 @@ export function OrderPdfDialog({
   const d = Math.max(0, Number(discount.replace(",", ".")) || 0);
   const f = Math.max(0, Number(shipping.replace(",", ".")) || 0);
   const total = Math.max(0, subtotal - d + f);
+  const before = num(receivedBefore);
+  const now = num(receivedNow);
+  const balanceAfter = Math.max(0, Math.round((total - before - now) * 100) / 100);
+  const receipt: ReceiptInfo = {
+    orderTotal: Math.round(total * 100) / 100,
+    receivedBefore: before,
+    receivedNow: now,
+    date: receiptDate,
+    method: pay.method,
+    note: receiptNote,
+  };
+  const brl = (v: number) => formatCurrency(v);
+  const firstName = (customer?.name ?? "").trim().split(/\s+/)[0] || "";
 
-  async function handleGenerate() {
-    if (!list) return;
+  // Monta o PDF escolhido (pedido ou recibo) e devolve arquivo + mensagem.
+  async function buildCurrent(): Promise<{ blob: Blob; name: string; text: string; save: () => void }> {
+    if (!list) throw new Error("itens");
+    const payment: PaymentInfo = { ...pay, discount: d, shipping: f };
+    writePref(order.id, payment);
+    writeSupplier(orgId, sup);
+    const company = await loadCompany(orgPath, orgId, accessToken);
+    const greet = firstName ? `Olá, ${firstName}!` : "Olá!";
+    if (mode === "recibo") {
+      const doc = await buildReceiptPdf({ order, customer, company, supplier: sup, receipt });
+      const name = receiptFileName(order, customer, receiptDate);
+      const text =
+        `${greet} Segue o recibo do pagamento de ${brl(now)} (${receiptKind(receipt)}) do pedido Nº ${orderNumber(order)} — ${company.name}. ` +
+        (balanceAfter > 0 ? `Saldo restante: ${brl(balanceAfter)}.` : "Pedido quitado. Obrigado!");
+      return {
+        blob: doc.output("blob"),
+        name,
+        text,
+        save: () => {
+          const rec = { date: receiptDate, amount: now, method: pay.method };
+          saveReceipt(order.id, rec);
+          setHistory((h) => [...h, rec]);
+        },
+      };
+    }
+    const doc = await buildOrderPdf({ order, customer, items: list, products, company, supplier: sup, payment });
+    const kind = isQuote ? "o orçamento" : "o pedido";
+    const text = `${greet} Segue ${kind} Nº ${orderNumber(order)} da ${company.name}, no valor de ${brl(total)}.`;
+    return { blob: doc.output("blob"), name: pdfFileName(order, customer), text, save: () => {} };
+  }
+
+  async function handleDownload() {
     setBusy(true);
     setError(null);
-    const payment: PaymentInfo = { ...pay, discount: d, shipping: f };
     try {
-      writePref(order.id, payment);
-      writeSupplier(orgId, sup);
-      const company = await loadCompany(orgPath, orgId, accessToken);
-      await downloadOrderPdf({ order, customer, items: list, products, company, supplier: sup, payment });
+      const out = await buildCurrent();
+      const url = URL.createObjectURL(out.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = out.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      out.save();
       onClose();
+    } catch {
+      setError("Não foi possível gerar o PDF. Tente de novo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareNow(out: { blob: Blob; name: string; text: string; save: () => void }) {
+    const result = await sharePdfOnWhatsapp(out.blob, out.name, customer?.phone, out.text);
+    if (result === "needs-tap") {
+      setPendingShare(out);
+      return;
+    }
+    setPendingShare(null);
+    if (result === "cancelled") return;
+    out.save();
+    if (result === "fallback") {
+      setInfo(
+        customer?.phone
+          ? "PDF baixado e conversa do cliente aberta no WhatsApp: é só anexar o arquivo baixado e enviar."
+          : "PDF baixado e WhatsApp aberto (o cliente não tem telefone cadastrado): escolha a conversa e anexe o arquivo."
+      );
+    } else {
+      onClose();
+    }
+  }
+
+  async function handleWhatsapp() {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const out = await buildCurrent();
+      await shareNow(out);
     } catch {
       setError("Não foi possível gerar o PDF. Tente de novo.");
     } finally {
@@ -198,13 +331,39 @@ export function OrderPdfDialog({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 id="pdf-dialog-title" className="text-lg font-semibold">
-              {isQuote ? "PDF do orçamento" : "PDF do pedido"} #{orderNumber(order)}
+              {mode === "recibo" ? "Recibo de pagamento" : isQuote ? "PDF do orçamento" : "PDF do pedido"} #
+              {orderNumber(order)}
             </h2>
             <p className="text-sm text-neutral-500">{customer?.name ?? "Cliente"}</p>
           </div>
           <button onClick={onClose} className="text-xl leading-none text-neutral-500 hover:text-neutral-300" aria-label="Fechar">
             ×
           </button>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 p-1 text-sm">
+          {(
+            [
+              ["pedido", isQuote ? "Orçamento" : "Pedido"],
+              ["recibo", "Recibo de pagamento"],
+            ] as const
+          ).map(([key, text]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setMode(key);
+                setInfo(null);
+                setPendingShare(null);
+              }}
+              aria-pressed={mode === key}
+              className={`rounded-md px-3 py-2 font-medium ${
+                mode === key ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              {text}
+            </button>
+          ))}
         </div>
 
         <div className="mb-4 rounded-lg border border-neutral-800">
@@ -269,6 +428,105 @@ export function OrderPdfDialog({
           )}
         </div>
 
+        {mode === "recibo" && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3 text-sm">
+              <div className="flex justify-between text-neutral-400">
+                <span>Total do pedido</span>
+                <span>{list ? brl(total) : "…"}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Com o desconto e o frete da aba {isQuote ? "Orçamento" : "Pedido"}, se houver.
+              </p>
+            </div>
+            <div>
+              <label className={label}>Valor recebido agora (R$)</label>
+              <input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={receivedNow}
+                onChange={(e) => setReceivedNow(e.target.value)}
+                className={field}
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[
+                  ["Sinal 50%", Math.round(total * 50) / 100],
+                  ["Restante", Math.max(0, Math.round((total - before) * 100) / 100)],
+                  ["Total", Math.round(total * 100) / 100],
+                ].map(([t, v]) => (
+                  <button
+                    key={t as string}
+                    type="button"
+                    onClick={() => setReceivedNow(money(v as number))}
+                    className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-blue-500"
+                  >
+                    {t} · {brl(v as number)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={label}>Já recebido antes (R$)</label>
+                <input
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={receivedBefore}
+                  onChange={(e) => setReceivedBefore(e.target.value)}
+                  className={field}
+                />
+              </div>
+              <div>
+                <label className={label}>Data do pagamento</label>
+                <input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} className={field} />
+              </div>
+              <div className="col-span-2">
+                <label className={label}>Forma de pagamento</label>
+                <select value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} className={field}>
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={label}>Observação (opcional)</label>
+                <input
+                  placeholder="Ex.: sinal para iniciar a produção"
+                  value={receiptNote}
+                  onChange={(e) => setReceiptNote(e.target.value)}
+                  className={field}
+                />
+              </div>
+            </div>
+            {history.length > 0 && (
+              <p className="text-xs text-neutral-500">
+                Recibos já emitidos neste aparelho:{" "}
+                {history.map((h) => `${h.date.split("-").reverse().join("/")} ${brl(h.amount)}`).join(" · ")}
+              </p>
+            )}
+            <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900/60 p-3 text-sm">
+              <div className="flex justify-between text-neutral-400">
+                <span>Recebido neste recibo</span>
+                <span>{brl(now)}</span>
+              </div>
+              <div className="flex justify-between text-neutral-400">
+                <span>Total recebido</span>
+                <span>{brl(before + now)}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-neutral-100">
+                <span>Saldo restante</span>
+                <span className={balanceAfter === 0 && now > 0 ? "text-emerald-400" : ""}>
+                  {balanceAfter === 0 && now > 0 ? "Quitado" : brl(balanceAfter)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === "pedido" && (
+        <>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={label}>A/C (comprador ou setor)</label>
@@ -388,21 +646,48 @@ export function OrderPdfDialog({
             <span>{list ? formatCurrency(total) : "…"}</span>
           </div>
         </div>
+        </>
+        )}
 
         {error && <p className="mt-3 rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
+        {info && <p className="mt-3 rounded bg-emerald-950 p-2 text-sm text-emerald-300">{info}</p>}
 
-        <div className="mt-4 flex gap-2">
+        {pendingShare ? (
           <button
-            onClick={handleGenerate}
-            disabled={busy || !list}
-            className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+            onClick={() => shareNow(pendingShare)}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25d366] px-4 py-3 text-sm font-semibold text-white"
           >
-            {busy ? "Gerando PDF…" : !list ? "Carregando itens…" : "Baixar PDF"}
+            PDF pronto — toque para abrir o WhatsApp
           </button>
-          <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:border-neutral-500">
-            Cancelar
-          </button>
-        </div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              onClick={handleWhatsapp}
+              disabled={busy || !list || (mode === "recibo" && now <= 0)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#25d366] px-4 py-3 text-sm font-semibold text-white hover:brightness-105 disabled:opacity-50"
+            >
+              {busy ? "Gerando PDF…" : !list ? "Carregando itens…" : "Enviar ao cliente pelo WhatsApp"}
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownload}
+                disabled={busy || !list || (mode === "recibo" && now <= 0)}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+              >
+                Baixar PDF
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:border-neutral-500"
+              >
+                Cancelar
+              </button>
+            </div>
+            {mode === "recibo" && now <= 0 && (
+              <p className="text-center text-xs text-neutral-500">Informe o valor recebido para gerar o recibo.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

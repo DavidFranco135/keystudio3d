@@ -696,3 +696,236 @@ export async function downloadOrderPdf(input: OrderPdfInput): Promise<void> {
   const doc = await buildOrderPdf(input);
   doc.save(pdfFileName(input.order, input.customer));
 }
+
+// ---------------------------------------------------------------------------
+// Recibo de pagamento (sinal, parcela ou quitação) e envio pelo WhatsApp.
+// ---------------------------------------------------------------------------
+
+export type ReceiptInfo = {
+  orderTotal: number;
+  receivedBefore: number; // já recebido em recibos anteriores
+  receivedNow: number; // valor deste recibo
+  date: string; // AAAA-MM-DD
+  method: string;
+  note: string;
+};
+
+export type ReceiptPdfInput = {
+  order: Order;
+  customer: Customer | null;
+  company: CompanyInfo;
+  supplier: SupplierInfo;
+  receipt: ReceiptInfo;
+};
+
+export function receiptFileName(order: Order, customer: Customer | null, date: string): string {
+  const who = (customer?.name ?? "cliente")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return `Recibo-${orderNumber(order)}-${date || "pagamento"}-${who || "cliente"}.pdf`;
+}
+
+export function receiptKind(r: ReceiptInfo): string {
+  const paid = r.receivedBefore + r.receivedNow;
+  if (paid >= r.orderTotal - 0.009) return r.receivedBefore > 0 ? "quitação do saldo" : "pagamento integral";
+  return r.receivedBefore > 0 ? "parcela" : "sinal / entrada";
+}
+
+export async function buildReceiptPdf(input: ReceiptPdfInput) {
+  const { order, customer, company, receipt } = input;
+  const sup = input.supplier;
+  const sellerName = sup.name.trim() || company.name;
+  const sellerPhone = sup.phone.trim() || company.whatsapp || "";
+  const sellerDoc = sup.document.trim() ? `${docLabelFor(sup.document)} ${formatDocument(sup.document)}` : "";
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 14;
+  const CW = W - M * 2;
+  const number = orderNumber(order);
+  const setText = (c: Rgb) => doc.setTextColor(c[0], c[1], c[2]);
+  const setFill = (c: Rgb) => doc.setFillColor(c[0], c[1], c[2]);
+  const setDraw = (c: Rgb) => doc.setDrawColor(c[0], c[1], c[2]);
+  const paidTotal = Math.round((receipt.receivedBefore + receipt.receivedNow) * 100) / 100;
+  const balance = Math.max(0, Math.round((receipt.orderTotal - paidTotal) * 100) / 100);
+  const kind = receiptKind(receipt);
+
+  doc.setProperties({
+    title: `Recibo — Pedido Nº ${number} — ${company.name}`,
+    subject: `Recibo de pagamento para ${customer?.name ?? "cliente"}`,
+    author: company.name,
+    creator: company.name,
+  });
+
+  // Cabeçalho na cor da marca, com a logo.
+  const HEADER_H = 38;
+  setFill(BLACK);
+  doc.rect(0, 0, W, HEADER_H, "F");
+  setFill(COPPER);
+  doc.rect(0, HEADER_H, W, 1.2, "F");
+  const logo = await loadImage(RECEIPT_LOGO);
+  if (logo) {
+    const lh = HEADER_H - 6;
+    const lw = (logo.w / logo.h) * lh;
+    doc.addImage(logo.data, "JPEG", M - 2, 3, lw, lh, "logo", "FAST");
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  setText(COPPER);
+  doc.text("RECIBO DE PAGAMENTO", W - M, 15, { align: "right" });
+  doc.setFontSize(10);
+  setText([255, 255, 255]);
+  doc.text(`Pedido Nº ${number}  •  ${dateBR(receipt.date)}`, W - M, 21.5, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.2);
+  setText([225, 215, 205]);
+  doc.text([sellerName, sellerDoc].filter(Boolean).join("  •  "), W - M, 28, { align: "right" });
+  if (sellerPhone) doc.text(`WhatsApp ${formatPhone(sellerPhone)}`, W - M, 32.2, { align: "right" });
+
+  // Valor em destaque.
+  let y = HEADER_H + 14;
+  setFill(SOFT);
+  setDraw(LINE);
+  doc.roundedRect(M, y, CW, 30, 3, 3, "FD");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  setText(MUTED);
+  doc.text("VALOR RECEBIDO", M + 8, y + 9, { charSpace: 0.4 });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  setText(COPPER_DARK);
+  doc.text(brl(receipt.receivedNow), M + 8, y + 22);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  setText(balance === 0 ? [21, 128, 61] : INK);
+  doc.text(balance === 0 ? "PEDIDO QUITADO" : `Saldo restante: ${brl(balance)}`, W - M - 8, y + 18, {
+    align: "right",
+  });
+
+  // Texto do recibo.
+  y += 42;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  setText(INK);
+  const payer = customer?.name ?? "o cliente";
+  const payerDoc = customer?.document ? `, ${docLabelFor(customer.document)} ${formatDocument(customer.document)},` : "";
+  const sentence =
+    `Recebemos de ${payer}${payerDoc} a importância de ${brl(receipt.receivedNow)}, ` +
+    `referente ao ${kind} do pedido Nº ${number}, paga via ${receipt.method || "—"} em ${dateBR(receipt.date)}.`;
+  const lines = doc.splitTextToSize(sentence, CW) as string[];
+  doc.text(lines, M, y);
+  y += lines.length * 5.6 + 8;
+
+  // Resumo dos valores.
+  const rows: [string, string, boolean?][] = [
+    ["Total do pedido", brl(receipt.orderTotal)],
+    ["Recebido anteriormente", brl(receipt.receivedBefore)],
+    ["Recebido neste recibo", brl(receipt.receivedNow)],
+    ["Total recebido", brl(paidTotal), true],
+    ["Saldo restante", balance === 0 ? "Quitado" : brl(balance), true],
+  ];
+  doc.setFontSize(10);
+  for (const [label, value, strong] of rows) {
+    setDraw(LINE);
+    doc.setLineWidth(0.3);
+    doc.line(M, y + 2.5, W - M, y + 2.5);
+    doc.setFont("helvetica", strong ? "bold" : "normal");
+    setText(strong ? INK : MUTED);
+    doc.text(label, M, y);
+    setText(INK);
+    doc.text(value, W - M, y, { align: "right" });
+    y += 8;
+  }
+
+  if (receipt.note.trim()) {
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    setText(COPPER_DARK);
+    doc.text("OBSERVAÇÕES", M, y, { charSpace: 0.4 });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    setText(INK);
+    const noteLines = doc.splitTextToSize(receipt.note.trim(), CW) as string[];
+    doc.text(noteLines, M, y + 5.5);
+    y += 5.5 + noteLines.length * 4.6;
+  }
+
+  // Assinatura.
+  y = Math.max(y + 22, H - 60);
+  setDraw([168, 162, 158]);
+  doc.setLineWidth(0.3);
+  doc.line(W / 2 - 45, y, W / 2 + 45, y);
+  doc.setFontSize(9);
+  setText(INK);
+  doc.text(sellerName, W / 2, y + 5, { align: "center" });
+  if (sellerDoc) {
+    setText(MUTED);
+    doc.setFontSize(8);
+    doc.text(sellerDoc, W / 2, y + 9.5, { align: "center" });
+  }
+
+  setDraw(LINE);
+  doc.line(M, H - 14, W - M, H - 14);
+  doc.setFontSize(7);
+  setText(MUTED);
+  doc.text([company.name, sellerPhone ? `WhatsApp ${formatPhone(sellerPhone)}` : ""].filter(Boolean).join("  •  "), M, H - 9.5);
+  doc.text("Este recibo não é um documento fiscal.", M, H - 6);
+  doc.text(`Recibo • Pedido Nº ${number}`, W - M, H - 9.5, { align: "right" });
+  return doc;
+}
+
+// Número do cliente no formato do wa.me (com 55), ou "" se não houver.
+export function whatsappDigits(phone: string | null | undefined): string {
+  const d = (phone ?? "").replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return d.length >= 12 ? d : "";
+}
+
+export type ShareResult = "shared" | "fallback" | "cancelled" | "needs-tap";
+
+// Envia o PDF pelo WhatsApp. No celular abre o "Compartilhar" do aparelho já
+// com o arquivo anexado (o lojista escolhe o WhatsApp e a conversa). No
+// computador baixa o PDF e abre a conversa do cliente com a mensagem pronta,
+// para anexar o arquivo baixado.
+export async function sharePdfOnWhatsapp(
+  blob: Blob,
+  fileName: string,
+  phone: string | null | undefined,
+  text: string
+): Promise<ShareResult> {
+  const file = new File([blob], fileName, { type: "application/pdf" });
+  const nav = navigator as Navigator & {
+    canShare?: (data: ShareData) => boolean;
+    share?: (data: ShareData) => Promise<void>;
+  };
+  const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  if (touch && nav.canShare?.({ files: [file] }) && nav.share) {
+    try {
+      await nav.share({ files: [file], text });
+      return "shared";
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === "AbortError") return "cancelled";
+      // O navegador exige um toque "fresco" (o PDF demorou a ficar pronto).
+      if (name === "NotAllowedError") return "needs-tap";
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  const digits = whatsappDigits(phone);
+  const wa = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+  window.open(wa, "_blank", "noopener,noreferrer");
+  return "fallback";
+}
+const RECEIPT_LOGO = "/brand/keystudio3d-logo-pdf.jpg";

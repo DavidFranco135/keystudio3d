@@ -27,6 +27,9 @@ export function ProductPicker({
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  // Só rola a lista até o item ativo quando ele muda pelo teclado; com o
+  // mouse/dedo a pessoa já está vendo o item e rolar de novo atrapalha.
+  const fromKeyboard = useRef(false);
 
   const selected = products.find((p) => p.id === value) ?? null;
   const matches = useMemo(
@@ -44,6 +47,8 @@ export function ProductPicker({
   }, [open]);
 
   useEffect(() => {
+    if (!fromKeyboard.current) return;
+    fromKeyboard.current = false;
     listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
@@ -56,10 +61,12 @@ export function ProductPicker({
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      fromKeyboard.current = true;
       setOpen(true);
       setActive((i) => Math.min(i + 1, Math.max(matches.length - 1, 0)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      fromKeyboard.current = true;
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       if (open && matches[active]) {
@@ -133,7 +140,7 @@ export function ProductPicker({
           role="listbox"
           // Na própria página (não flutuante): o painel de Detalhes do pedido
           // tem overflow-hidden e cortaria uma lista sobreposta.
-          className="mt-1 max-h-72 overflow-auto rounded-lg border border-neutral-700 bg-neutral-950 py-1 shadow-2xl"
+          className="mt-1 max-h-72 touch-pan-y overflow-auto overscroll-contain rounded-lg border border-neutral-700 bg-neutral-950 py-1 shadow-2xl"
         >
           {matches.length === 0 ? (
             <li className="px-3 py-2 text-sm text-neutral-500">Nenhum produto encontrado.</li>
@@ -143,11 +150,13 @@ export function ProductPicker({
                 key={p.id}
                 role="option"
                 aria-selected={p.id === value}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  choose(p);
+                // Escolhe só no toque/clique completo: encostar o dedo para
+                // rolar a lista não seleciona mais o produto.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(p)}
+                onPointerEnter={(e) => {
+                  if (e.pointerType === "mouse") setActive(i);
                 }}
-                onPointerEnter={() => setActive(i)}
                 className={`flex cursor-pointer items-center gap-3 px-3 py-1.5 text-sm ${
                   i === active ? "bg-neutral-800" : ""
                 } ${p.id === value ? "text-blue-300" : "text-neutral-200"}`}

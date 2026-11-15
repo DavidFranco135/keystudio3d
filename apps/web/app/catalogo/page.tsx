@@ -30,6 +30,7 @@ export default function CatalogoPage() {
   const [framing, setFraming] = useState(false);
   const [isSavingFrame, setIsSavingFrame] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const orgPath = `/api/v1/organizations/${currentOrganizationId}`;
@@ -103,13 +104,16 @@ export default function CatalogoPage() {
 
   function handleTouchStart(event: React.TouchEvent) {
     touchStartX.current = event.touches[0].clientX;
+    touchStartY.current = event.touches[0].clientY;
   }
 
   function handleTouchEnd(event: React.TouchEvent) {
     if (touchStartX.current == null) return;
     const delta = event.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = event.changedTouches[0].clientY - (touchStartY.current ?? 0);
     touchStartX.current = null;
-    if (Math.abs(delta) < 40) return;
+    // Rolagem vertical não troca a foto.
+    if (Math.abs(delta) < 40 || Math.abs(delta) < Math.abs(deltaY) * 1.5) return;
     if (delta > 0) showPrevPhoto();
     else showNextPhoto();
   }

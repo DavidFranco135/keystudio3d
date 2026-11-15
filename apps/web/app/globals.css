@@ -280,9 +280,9 @@
     transparent 0deg,
     transparent 70deg,
     rgba(154, 79, 34, 0.15) 150deg,
-    #9a4f22 250deg,
-    #e09060 320deg,
-    #ffd9b8 357deg,
+    #b8693a 250deg,
+    #edb48a 320deg,
+    #ffe6d1 357deg,
     transparent 360deg
   );
 }
@@ -301,16 +301,16 @@
   margin-left: -7px;
   border-radius: 9999px;
   background: #fff1e4;
-  box-shadow: 0 0 10px 4px rgba(255, 180, 130, 0.95), 0 0 24px 8px rgba(224, 144, 96, 0.55);
+  box-shadow: 0 0 10px 4px rgba(255, 180, 130, 0.95), 0 0 24px 8px rgba(237, 180, 138, 0.55);
 }
 /* anel completo que acende no fim */
 .ms-full { opacity: 0; will-change: opacity; }
 .ms-solid {
-  background: conic-gradient(#ffd9b8, #e09060 25%, #9a4f22 50%, #e09060 75%, #ffd9b8);
+  background: conic-gradient(#ffe6d1, #edb48a 25%, #c47a4a 50%, #edb48a 75%, #ffe6d1);
 }
 .ms-halo {
   inset: -30px;
-  background: radial-gradient(circle, rgba(255, 190, 150, 0.5) 0%, rgba(224, 144, 96, 0.25) 35%, transparent 65%);
+  background: radial-gradient(circle, rgba(255, 190, 150, 0.5) 0%, rgba(237, 180, 138, 0.25) 35%, transparent 65%);
   opacity: 0;
   will-change: opacity, transform;
 }
@@ -324,8 +324,8 @@
   margin: -84px 0 0 -84px;
   border-radius: 9999px;
   background: radial-gradient(circle at 50% 35%, #1d1510 0%, #0c0907 75%, #000 100%);
-  box-shadow: 0 0 0 1px rgba(224, 144, 96, 0.35), 0 0 60px -6px rgba(224, 144, 96, 0.55),
-    inset 0 -8px 20px rgba(224, 144, 96, 0.12);
+  box-shadow: 0 0 0 1px rgba(237, 180, 138, 0.35), 0 0 60px -6px rgba(237, 180, 138, 0.55),
+    inset 0 -8px 20px rgba(237, 180, 138, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -342,7 +342,7 @@
 .moria-splash-initial {
   font-family: var(--font-display), Georgia, serif;
   font-size: 4rem;
-  color: #e09060;
+  color: #edb48a;
 }
 .moria-splash-name {
   font-size: 11px;
@@ -361,8 +361,8 @@
   height: var(--s);
   margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
   border-radius: 9999px;
-  background: #ffd9b8;
-  box-shadow: 0 0 8px 2px rgba(224, 144, 96, 0.9);
+  background: #ffe6d1;
+  box-shadow: 0 0 8px 2px rgba(237, 180, 138, 0.9);
   opacity: 0;
 }
 

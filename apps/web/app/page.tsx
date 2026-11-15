@@ -598,8 +598,8 @@ export default function LojaAdminPage() {
                       {t === "keystudio" && (
                         <span
                           aria-hidden
-                          className="h-4 w-4 rounded-full border border-[#e09060]"
-                          style={{ background: "linear-gradient(135deg, #0c0907 50%, #e09060 50%)" }}
+                          className="h-4 w-4 rounded-full border border-[#edb48a]"
+                          style={{ background: "linear-gradient(135deg, #0e0a07 50%, #edb48a 50%)" }}
                         />
                       )}
                       {label}

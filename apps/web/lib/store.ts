@@ -94,14 +94,14 @@ type Accent = {
 };
 
 export const ACCENTS: Record<string, Accent> = {
-  // Cobre da logo KeyStudio3D (#e09060). No tema claro usa o mesmo cobre mais
+  // Cobre claro da logo KeyStudio3D (#edb48a). No tema claro usa um cobre
   // escuro, porque o tom da logo não tem contraste sobre fundo claro.
   copper: {
     label: "Cobre KeyStudio",
     color: "#9a4f22",
     soft: "#fbf1ea",
-    swatch: "#e09060",
-    dark: { color: "#e09060", ink: "#140c08" },
+    swatch: "#edb48a",
+    dark: { color: "#edb48a", ink: "#1a0f08" },
   },
   indigo: { label: "Índigo", color: "#4f46e5", soft: "#eef2ff" },
   emerald: { label: "Esmeralda", color: "#047857", soft: "#ecfdf5" },
@@ -113,7 +113,7 @@ export const ACCENTS: Record<string, Accent> = {
 export const THEMES = {
   light: { bg: "#faf8f5", surface: "#ffffff", ink: "#1c1917", muted: "#78716c", line: "#e7e5e4" },
   dark: { bg: "#0b0b10", surface: "#15151c", ink: "#f5f5f4", muted: "#a1a1aa", line: "#2a2a33" },
-  keystudio: { bg: "#0c0907", surface: "#17110d", ink: "#f6ede5", muted: "#b39d8c", line: "#33261c" },
+  keystudio: { bg: "#0e0a07", surface: "#1a130e", ink: "#f8efe6", muted: "#c4ab97", line: "#3a2b20" },
 } as const;
 
 function rgba(hex: string, alpha: number): string {

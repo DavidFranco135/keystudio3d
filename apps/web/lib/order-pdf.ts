@@ -3,6 +3,7 @@
 // pedido, tabela de itens, totais, forma de pagamento, observações e rodapé.
 import type { Customer, Order, OrderItem, Product } from "@/lib/types";
 import { STATUS_LABELS } from "@/lib/order-status";
+import { PAYMENT_TERMS } from "@/lib/store";
 
 export const PAYMENT_METHODS = [
   "PIX",
@@ -625,13 +626,15 @@ export async function buildOrderPdf(input: OrderPdfInput) {
         `Orçamento válido por ${payment.validityDays || 7} dias a partir da emissão.`,
         term > 0
           ? `Pagamento em até ${term} dias após a emissão, ao favorecido indicado neste documento.`
-          : "A produção é iniciada após a aprovação do orçamento e a confirmação do pagamento.",
+          : PAYMENT_TERMS,
+        "A produção é iniciada após a aprovação do orçamento e a confirmação do pagamento.",
         "Peças impressas em 3D podem apresentar pequenas variações de cor e textura, próprias do processo.",
       ]
     : [
         term > 0
           ? `Pagamento em até ${term} dias após a emissão, ao favorecido indicado neste documento.`
-          : "A produção é iniciada após a confirmação do pagamento (ou da entrada combinada).",
+          : PAYMENT_TERMS,
+        "A produção é iniciada após a confirmação do pagamento (ou da entrada combinada).",
         "Prazo de entrega contado a partir da confirmação do pagamento.",
         "Peças impressas em 3D podem apresentar pequenas variações de cor e textura, próprias do processo.",
       ];

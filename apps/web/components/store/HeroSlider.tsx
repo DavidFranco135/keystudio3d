@@ -91,7 +91,7 @@ export function HeroSlider({
       {/* No computador a altura é limitada à tela (menos o cabeçalho): a capa
           cabe inteira na primeira vista, e o fundo desfocado completa as laterais. */}
       <div
-        className={`relative w-full overflow-hidden lg:max-h-[calc(100vh-6rem)] ${hasText ? "" : "cursor-pointer"}`}
+        className={`relative w-full overflow-hidden lg:max-h-[calc(100vh-8rem)] ${hasText ? "" : "cursor-pointer"}`}
         style={{ aspectRatio: String(ratio) }}
         // Capa sem texto (arte pronta, com o botão já desenhado): clicar abre o catálogo.
         onClick={() => {

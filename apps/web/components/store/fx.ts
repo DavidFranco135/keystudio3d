@@ -64,7 +64,11 @@ export function useStoreFx(root: React.RefObject<HTMLElement | null>, ready: boo
       if (!header) return;
       const max = document.documentElement.scrollHeight - window.innerHeight;
       header.style.setProperty("--fx-scroll", String(max > 0 ? Math.min(1, window.scrollY / max) : 0));
-      header.classList.toggle("is-scrolled", window.scrollY > 8);
+      // Duas marcas (entra aos 80 px, sai aos 20 px): o cabeçalho encolhe ao
+      // rolar e isso muda a altura da página; com uma marca só ele piscaria.
+      const y = window.scrollY;
+      if (y > 80) header.classList.add("is-scrolled");
+      else if (y < 20) header.classList.remove("is-scrolled");
     };
 
     el.addEventListener("pointerdown", onPointerDown);

@@ -66,6 +66,35 @@
   pointer-events: none;
 }
 
+/* Cabeçalho que encolhe ao rolar: a faixa de avisos recolhe, a linha do
+   cabeçalho fica mais baixa e a logo menor. */
+.store-fx .fx-marquee {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.store-fx .fx-header.is-scrolled .fx-marquee {
+  grid-template-rows: 0fr;
+}
+.store-fx .fx-head-row {
+  transition: padding 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.store-fx .fx-header.is-scrolled .fx-head-row {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+.store-fx .fx-logo {
+  transition: height 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.store-fx .fx-header.is-scrolled .fx-logo {
+  height: 2.5rem;
+}
+
+/* Faixa de avisos: passa devagar; para ao passar o mouse. */
+.store-fx .fx-marquee-track:hover {
+  animation-play-state: paused;
+}
+
 /* Botões principais: halo, pressão, brilho que atravessa e onda no clique */
 .store-fx .fx-btn {
   position: relative;
@@ -160,7 +189,20 @@
   }
   .store-fx .fx-pulse {
     animation: fx-pulse 2.4s ease-out infinite;
+  }  .store-fx .fx-marquee-track {
+    animation: fx-marquee 45s linear infinite;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-fx .fx-marquee > div {
+    overflow-x: auto;
+  }
+}
+
+@keyframes fx-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-25%); }
 }
 
 @keyframes fx-sweep {
@@ -174,4 +216,204 @@
   0% { box-shadow: 0 0 0 0 var(--accent-ring), 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
   70% { box-shadow: 0 0 0 16px transparent, 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
   100% { box-shadow: 0 0 0 0 transparent, 0 20px 40px -12px rgba(0, 0, 0, 0.35); }
+}
+
+/* ---------------------------------------------------------------------------
+   Abertura da loja (components/store/SplashIntro.tsx)
+   Só transform e opacity nas animações: rodam na placa de vídeo, sem travar
+   enquanto a loja é montada por baixo.
+   --------------------------------------------------------------------------- */
+.moria-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  background: radial-gradient(circle at 50% 45%, #2a1a10 0%, #0f0a07 55%, #050302 100%);
+  transition: opacity 0.6s ease, visibility 0.6s;
+  cursor: pointer;
+}
+.moria-splash.is-exit {
+  opacity: 0;
+  visibility: hidden;
+}
+.moria-splash-stage {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.moria-splash.is-exit .moria-splash-stage {
+  transform: scale(1.15);
+}
+@media (max-width: 400px) {
+  .moria-splash-stage { transform: scale(0.82); }
+  .moria-splash.is-exit .moria-splash-stage { transform: scale(0.95); }
+}
+
+/* Camadas do anel (todas do mesmo tamanho, centradas) */
+.ms-ring, .ms-spin, .ms-full, .ms-arc, .ms-solid, .ms-track, .ms-thin, .ms-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+}
+.ms-ring { inset: 18px; }
+/* recorte em anel: só a borda de ~4 px aparece */
+.ms-arc, .ms-solid, .ms-track, .ms-thin {
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
+}
+.ms-track { background: rgba(246, 237, 229, 0.08); }
+.ms-thin {
+  inset: -12px;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
+  background: conic-gradient(rgba(255, 214, 180, 0.5) 0 18%, transparent 18% 50%, rgba(255, 214, 180, 0.28) 50% 60%, transparent 60%);
+  will-change: transform;
+}
+/* cometa: cauda que esmaece até a cabeça brilhante (no topo) */
+.ms-arc {
+  background: conic-gradient(
+    transparent 0deg,
+    transparent 70deg,
+    rgba(154, 79, 34, 0.15) 150deg,
+    #9a4f22 250deg,
+    #e09060 320deg,
+    #ffd9b8 357deg,
+    transparent 360deg
+  );
+}
+.ms-glow {
+  filter: blur(7px);
+  opacity: 0.95;
+  transform: scale(1.02);
+}
+.ms-spin { will-change: transform; }
+.ms-head {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  width: 10px;
+  height: 10px;
+  margin-left: -7px;
+  border-radius: 9999px;
+  background: #fff1e4;
+  box-shadow: 0 0 10px 4px rgba(255, 180, 130, 0.95), 0 0 24px 8px rgba(224, 144, 96, 0.55);
+}
+/* anel completo que acende no fim */
+.ms-full { opacity: 0; will-change: opacity; }
+.ms-solid {
+  background: conic-gradient(#ffd9b8, #e09060 25%, #9a4f22 50%, #e09060 75%, #ffd9b8);
+}
+.ms-halo {
+  inset: -30px;
+  background: radial-gradient(circle, rgba(255, 190, 150, 0.5) 0%, rgba(224, 144, 96, 0.25) 35%, transparent 65%);
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+.moria-splash-disc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168px;
+  height: 168px;
+  margin: -84px 0 0 -84px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 35%, #1d1510 0%, #0c0907 75%, #000 100%);
+  box-shadow: 0 0 0 1px rgba(224, 144, 96, 0.35), 0 0 60px -6px rgba(224, 144, 96, 0.55),
+    inset 0 -8px 20px rgba(224, 144, 96, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.moria-splash-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.moria-splash-logo.is-loaded { opacity: 1; }
+.moria-splash-initial {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 4rem;
+  color: #e09060;
+}
+.moria-splash-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: #f6ede5;
+  padding-left: 0.45em;
+  opacity: 0.9;
+}
+.moria-splash-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--s);
+  height: var(--s);
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  border-radius: 9999px;
+  background: #ffd9b8;
+  box-shadow: 0 0 8px 2px rgba(224, 144, 96, 0.9);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* abertura completa */
+  .moria-splash.is-intro .ms-spin {
+    animation: ms-spin-in 1.55s cubic-bezier(0.55, 0, 0.25, 1) both, ms-fade-out 0.35s ease 1.4s both;
+  }
+  .moria-splash.is-intro .ms-full { animation: ms-fade-in 0.35s ease 1.35s both; }
+  .moria-splash.is-intro .ms-halo { animation: ms-flash 0.9s ease-out 1.35s both; }
+  .moria-splash.is-intro .moria-splash-disc { animation: ms-disc 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both; }
+  .moria-splash.is-intro .moria-splash-name { animation: ms-name 0.8s ease 1.3s both; }
+  .moria-splash-spark { animation: moria-spark 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .moria-splash .ms-thin { animation: ms-rev 3.2s linear infinite; }
+  /* carregando (visitas seguintes): o cometa fica girando */
+  .moria-splash.is-loader .ms-spin { animation: ms-loop 1s linear infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moria-splash .ms-full { opacity: 1; }
+  .moria-splash .ms-spin { opacity: 0; }
+}
+
+@keyframes ms-spin-in {
+  from { transform: rotate(-200deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes ms-loop {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes ms-rev {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+@keyframes ms-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ms-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ms-flash {
+  0% { opacity: 0; transform: scale(0.85); }
+  30% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+@keyframes ms-disc {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ms-name {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 0.9; transform: translateY(0); }
+}
+@keyframes moria-spark {
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(-112px) scale(1); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-112px - var(--d))) scale(0.3); }
 }

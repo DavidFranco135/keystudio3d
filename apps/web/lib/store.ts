@@ -208,3 +208,7 @@ export function refreshPublicStoreCache(slug: string | undefined): void {
     fetch(`/loja-data?s=${encodeURIComponent(slug)}&refresh=1`).catch(() => {});
   }, 1000);
 }
+
+// Condição de pagamento da KeyStudio3D: aparece na faixa do topo da loja e
+// nas condições gerais do PDF do pedido.
+export const PAYMENT_TERMS = "Pagamento: 50% na confirmação do pedido e 50% antes da entrega ou envio.";

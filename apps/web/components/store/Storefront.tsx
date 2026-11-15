@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
-import { formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
+import { PAYMENT_TERMS, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
 import { trackStoreEvent, useVisitTracker } from "@/lib/visits";
@@ -13,6 +13,7 @@ import { FeaturedSlider } from "./FeaturedSlider";
 import { SearchOverlay } from "./SearchOverlay";
 import { useStoreFx } from "./fx";
 import { HeroSlider } from "./HeroSlider";
+import { SplashIntro } from "./SplashIntro";
 import { ProductCard } from "./ProductCard";
 import { ProductModal } from "./ProductModal";
 import {
@@ -123,6 +124,34 @@ function TabBar({
           )}
         </button>
       ))}
+    </div>
+  );
+}
+
+// Faixa de avisos que passa devagar no topo (condição de pagamento). O texto
+// é repetido para o giro não ter emenda; para ao passar o mouse.
+function AnnouncementBar({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  const run = (hidden: boolean) => (
+    <div className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
+      {items.map((t, i) => (
+        <span key={i} className="flex items-center whitespace-nowrap">
+          <span className="px-6">{t}</span>
+          <span className="opacity-50">✦</span>
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <div className="fx-marquee bg-[var(--accent)] text-[var(--accent-ink)]">
+      <div className="overflow-hidden">
+        <div className="fx-marquee-track flex w-max py-2 text-[11px] font-medium uppercase tracking-[0.18em]">
+          {run(false)}
+          {run(true)}
+          {run(true)}
+          {run(true)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -383,14 +412,27 @@ export function Storefront({ slug }: { slug: string }) {
     return list;
   }, [store, search, sort, onlyAvailable, category]);
 
+  // A abertura fica sempre na primeira posição: assim ela não reinicia quando
+  // a loja termina de carregar (o resto da página troca por baixo dela).
+  const splash = (
+    <SplashIntro
+      logoUrl={store?.settings.logo_url || undefined}
+      name={store?.settings.display_name || store?.name || "KeyStudio3D"}
+      ready={store !== null || error !== null}
+    />
+  );
+
   if (error) {
     return (
+      <>
+      {splash}
       <div className="flex min-h-screen items-center justify-center bg-neutral-50 p-6 text-center text-neutral-700">
         <div className="space-y-2">
           <p className="text-2xl font-semibold">{error}</p>
           <p className="text-sm text-neutral-500">Confira o endereço do link da loja.</p>
         </div>
       </div>
+      </>
     );
   }
 
@@ -399,9 +441,12 @@ export function Storefront({ slug }: { slug: string }) {
 
   if (!store || !settings) {
     return (
-      <div style={themeVars("indigo", "light")} className="min-h-screen bg-[var(--bg)]">
-        <SkeletonStore />
-      </div>
+      <>
+        {splash}
+        <div style={themeVars("copper", "keystudio")} className="min-h-screen bg-[var(--bg)]">
+          <SkeletonStore />
+        </div>
+      </>
     );
   }
 
@@ -492,20 +537,23 @@ export function Storefront({ slug }: { slug: string }) {
   ];
 
   return (
+    <>
+    {splash}
     <div
       style={vars}
       ref={rootRef}
       className="store-fx min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
     >
       <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <AnnouncementBar items={[PAYMENT_TERMS, "Pedidos pelo WhatsApp, sem cadastro"]} />
+        <div className="fx-head-row mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button onClick={() => goTab(0)} className="flex min-w-0 items-center gap-3 text-left">
             {settings.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imgSrc(settings.logo_url, IMG_WIDTH.thumb)}
                 alt={storeName}
-                className="h-11 w-11 shrink-0 rounded-2xl object-cover shadow-md"
+                className="fx-logo h-11 w-11 shrink-0 rounded-2xl object-cover shadow-md"
               />
             ) : (
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--accent-ink)] shadow-md">
@@ -1023,5 +1071,6 @@ export function Storefront({ slug }: { slug: string }) {
         onSent={() => showToast("Abrindo o WhatsApp…")}
       />
     </div>
+    </>
   );
 }

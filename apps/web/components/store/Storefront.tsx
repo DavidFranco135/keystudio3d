@@ -43,13 +43,11 @@ import {
 
 const TABS = ["Início", "Catálogo", "Como pedir", "Contato"] as const;
 
-// "Quem somos": o mesmo texto da arte (public/brand/quem-somos-keyla.jpg),
-// usado como descrição da foto e, no celular, abaixo dela.
+// Texto da seção "Quem somos" (ao lado da foto da Keyla).
 const QUEM_SOMOS_PARAGRAPHS = [
   "Olá! Sou a Keyla, esposa do David, e juntos começamos a Key Studio 3D, um projeto que nasceu do nosso desejo de transformar ideias em realidade. Trabalhamos com impressão 3D, criando produtos personalizados, criativos e feitos para tornar cada detalhe especial.",
   "Aqui, cada ideia ganha forma e cada criação carrega um pouquinho de nós. Seja bem-vindo(a) ao nosso mundo!",
 ];
-const QUEM_SOMOS_TEXT = `Oi, prazer! Eu sou a Keyla. ${QUEM_SOMOS_PARAGRAPHS.join(" ")}`;
 
 function useStoredState<T>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
@@ -783,43 +781,45 @@ export function Storefront({ slug }: { slug: string }) {
               )}
 
               <Reveal>
-                <section className="space-y-6" aria-labelledby="quem-somos">
-                  <div className="space-y-2">
+                <section
+                  aria-labelledby="quem-somos"
+                  className="grid items-center gap-8 overflow-hidden rounded-[32px] border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-8 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] md:gap-12 lg:p-12"
+                >
+                  {/* Foto inteira (sem corte), no formato dela. */}
+                  <picture className="mx-auto block w-full max-w-sm overflow-hidden rounded-[24px] bg-[var(--accent-soft)] shadow-[0_24px_60px_-30px_rgba(0,0,0,0.45)] md:max-w-none">
+                    <source srcSet="/brand/quem-somos-keyla.webp?v=2" type="image/webp" />
+                    <img
+                      src="/brand/quem-somos-keyla.jpg?v=2"
+                      alt="Keyla, da KeyStudio3D"
+                      width={1200}
+                      height={1600}
+                      loading="lazy"
+                      className="block h-auto w-full"
+                    />
+                  </picture>
+                  <div className="space-y-5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-text)]">
                       Quem somos
                     </p>
-                    <h2
-                      id="quem-somos"
-                      className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl"
-                    >
-                      Prazer, KeyStudio3D
-                    </h2>
-                  </div>
-                  {/* Foto inteira (sem corte): o texto faz parte da arte. No
-                      celular, toque abre em tamanho grande e o texto também
-                      aparece abaixo, para ler sem ampliar. */}
-                  <a
-                    href="/brand/quem-somos-keyla.jpg"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block overflow-hidden rounded-[28px] border border-[var(--line)] shadow-[0_24px_60px_-30px_rgba(0,0,0,0.45)] transition duration-500 hover:-translate-y-1"
-                  >
-                    <picture>
-                      <source srcSet="/brand/quem-somos-keyla.webp" type="image/webp" />
-                      <img
-                        src="/brand/quem-somos-keyla.jpg"
-                        alt={QUEM_SOMOS_TEXT}
-                        width={1600}
-                        height={1066}
-                        loading="lazy"
-                        className="block h-auto w-full"
-                      />
-                    </picture>
-                  </a>
-                  <div className="space-y-3 text-sm leading-relaxed text-[var(--muted)] sm:hidden">
-                    {QUEM_SOMOS_PARAGRAPHS.map((t) => (
-                      <p key={t}>{t}</p>
-                    ))}
+                    <div className="space-y-1">
+                      <p className="font-[family-name:var(--font-display)] text-2xl italic text-[var(--accent-text)] sm:text-3xl">
+                        Oi, prazer!
+                      </p>
+                      <h2
+                        id="quem-somos"
+                        className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight sm:text-5xl"
+                      >
+                        Eu sou a Keyla
+                      </h2>
+                    </div>
+                    <div className="space-y-4 text-base leading-relaxed text-[var(--muted)] sm:text-lg">
+                      {QUEM_SOMOS_PARAGRAPHS.map((t) => (
+                        <p key={t}>{t}</p>
+                      ))}
+                    </div>
+                    <p className="text-sm font-medium text-[var(--accent-text)]">
+                      KeyStudio3D · Feito com amor · Criado do zero
+                    </p>
                   </div>
                 </section>
               </Reveal>

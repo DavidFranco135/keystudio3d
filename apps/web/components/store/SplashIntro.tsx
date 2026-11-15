@@ -14,18 +14,19 @@ import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
 const SEEN_KEY = "keystudio-abertura-vista";
 const LOGO_KEY = "keystudio-abertura-logo";
-const INTRO_MS = 2200;
+// Duas voltas (~2 s) + explosão que esmaece (~1 s); só então a loja abre.
+const INTRO_MS = 3050;
 const EXIT_MS = 650;
 const MAX_WAIT_MS = 7000;
 
 type Phase = "intro" | "loader" | "exit" | "done";
 
 // Faíscas que saem do anel quando ele se fecha: ângulo e distância de cada uma.
-const SPARKS = Array.from({ length: 14 }, (_, i) => ({
-  angle: (360 / 14) * i + (i % 2 ? 9 : -6),
-  distance: 34 + ((i * 37) % 30),
-  delay: 1350 + ((i * 53) % 200),
-  size: i % 3 === 0 ? 5 : 3,
+const SPARKS = Array.from({ length: 28 }, (_, i) => ({
+  angle: (360 / 28) * i + (i % 2 ? 7 : -5),
+  distance: 70 + ((i * 47) % 90),
+  delay: 2000 + ((i * 29) % 140),
+  size: i % 4 === 0 ? 7 : i % 2 ? 4 : 5,
 }));
 
 export function SplashIntro({ logoUrl, name, ready }: { logoUrl?: string; name: string; ready: boolean }) {
@@ -119,6 +120,9 @@ export function SplashIntro({ logoUrl, name, ready }: { logoUrl?: string; name: 
             <div className="ms-solid" />
           </div>
           <div className="ms-halo" />
+          {/* explosão: duas ondas de luz que se expandem quando o anel fecha */}
+          <div className="ms-wave" />
+          <div className="ms-wave ms-wave-2" />
         </div>
 
         {!loader &&

@@ -308,6 +308,15 @@
 .ms-solid {
   background: conic-gradient(#ffe6d1, #edb48a 25%, #c47a4a 50%, #edb48a 75%, #ffe6d1);
 }
+.ms-wave {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 3px solid #ffe6d1;
+  box-shadow: 0 0 24px 6px rgba(237, 180, 138, 0.6), inset 0 0 18px 2px rgba(237, 180, 138, 0.6);
+  opacity: 0;
+  will-change: transform, opacity;
+}
 .ms-halo {
   inset: -30px;
   background: radial-gradient(circle, rgba(255, 190, 150, 0.5) 0%, rgba(237, 180, 138, 0.25) 35%, transparent 65%);
@@ -368,14 +377,18 @@
 
 @media (prefers-reduced-motion: no-preference) {
   /* abertura completa */
+  /* duas voltas completas acelerando e freando; ao fechar, explode */
   .moria-splash.is-intro .ms-spin {
-    animation: ms-spin-in 1.55s cubic-bezier(0.55, 0, 0.25, 1) both, ms-fade-out 0.35s ease 1.4s both;
+    animation: ms-spin-in 2s cubic-bezier(0.5, 0, 0.3, 1) both, ms-fade-out 0.3s ease 1.92s both;
   }
-  .moria-splash.is-intro .ms-full { animation: ms-fade-in 0.35s ease 1.35s both; }
-  .moria-splash.is-intro .ms-halo { animation: ms-flash 0.9s ease-out 1.35s both; }
-  .moria-splash.is-intro .moria-splash-disc { animation: ms-disc 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both; }
-  .moria-splash.is-intro .moria-splash-name { animation: ms-name 0.8s ease 1.3s both; }
-  .moria-splash-spark { animation: moria-spark 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .moria-splash.is-intro .ms-full { animation: ms-full 1.05s ease 1.92s both; }
+  .moria-splash.is-intro .ms-halo { animation: ms-flash 1.05s ease-out 1.95s both; }
+  .moria-splash.is-intro .ms-wave { animation: ms-wave 0.95s cubic-bezier(0.15, 0.6, 0.3, 1) 1.98s both; }
+  .moria-splash.is-intro .ms-wave-2 { animation-delay: 2.12s; }
+  .moria-splash.is-intro .ms-ring { animation: ms-shake 0.4s ease-out 1.97s both; }
+  .moria-splash.is-intro .moria-splash-disc { animation: ms-disc 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both; }
+  .moria-splash.is-intro .moria-splash-name { animation: ms-name 0.8s ease 1.8s both; }
+  .moria-splash-spark { animation: moria-spark 1s cubic-bezier(0.15, 0.7, 0.3, 1) both; }
   .moria-splash .ms-thin { animation: ms-rev 3.2s linear infinite; }
   /* carregando (visitas seguintes): o cometa fica girando */
   .moria-splash.is-loader .ms-spin { animation: ms-loop 1s linear infinite; }
@@ -386,8 +399,23 @@
 }
 
 @keyframes ms-spin-in {
-  from { transform: rotate(-200deg); }
-  to { transform: rotate(360deg); }
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(630deg); }
+}
+/* anel completo: acende forte na explosão e assenta */
+@keyframes ms-full {
+  0% { opacity: 0; transform: scale(1); }
+  20% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes ms-wave {
+  0% { opacity: 0.95; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.3); }
+}
+@keyframes ms-shake {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.04); }
+  100% { transform: scale(1); }
 }
 @keyframes ms-loop {
   from { transform: rotate(0deg); }
@@ -400,9 +428,9 @@
 @keyframes ms-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ms-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes ms-flash {
-  0% { opacity: 0; transform: scale(0.85); }
-  30% { opacity: 1; transform: scale(1.05); }
-  100% { opacity: 0; transform: scale(1.15); }
+  0% { opacity: 0; transform: scale(0.8); }
+  22% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(2.1); }
 }
 @keyframes ms-disc {
   from { opacity: 0; transform: scale(0.6); }
@@ -413,7 +441,7 @@
   to { opacity: 0.9; transform: translateY(0); }
 }
 @keyframes moria-spark {
-  0% { opacity: 0; transform: rotate(var(--a)) translateY(-112px) scale(1); }
-  15% { opacity: 1; }
-  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-112px - var(--d))) scale(0.3); }
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(-112px) scale(1.4); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-112px - var(--d))) scale(0.2); }
 }

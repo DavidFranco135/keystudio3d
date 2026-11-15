@@ -474,15 +474,15 @@
   92%, 100% { transform: translateX(130%); }
 }
 
-/* Esqueleto das fotos: brilho passando enquanto a foto do card carrega. */
+/* Esqueleto das fotos: brilho passando enquanto a foto do card carrega
+   (só transform, roda na placa de vídeo sem pesar na rolagem). */
 .store-fx .fx-img-skel::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 0 -100%;
   z-index: 0;
   opacity: 0;
-  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
-  background-size: 220% 100%;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.4) 50%, transparent 65%);
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
@@ -491,8 +491,8 @@
   animation: fx-skel 1.3s linear infinite;
 }
 @keyframes fx-skel {
-  from { background-position: 120% 0; }
-  to { background-position: -120% 0; }
+  from { transform: translateX(-35%); }
+  to { transform: translateX(35%); }
 }
 
 /* Janela do produto: saída suave ao fechar. */
@@ -530,9 +530,6 @@
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .store-fx .fx-eta-icon {
-    animation: fx-pulse 2.8s ease-out infinite;
-  }
   .fx-cube-spin {
     display: inline-block;
     animation: fx-cube 1.6s linear infinite;
@@ -545,8 +542,45 @@
 /* Textura do fundo KeyStudio3D: linhas finas de camadas de impressão 3D,
    quase invisíveis, e um brilho cobre bem suave no alto da página. */
 .store-fx.fx-texture {
+  isolation: isolate;
+}
+/* Camada própria, parada atrás do conteúdo: rolar a página não repinta a
+   textura (fundo "fixed" no próprio elemento fazia o celular redesenhar
+   tudo a cada movimento e a rolagem agarrava). */
+.store-fx.fx-texture::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(1200px 520px at 85% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
     repeating-linear-gradient(0deg, color-mix(in srgb, var(--ink) 2.5%, transparent) 0 1px, transparent 1px 5px);
-  background-attachment: fixed, scroll;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Celular: sem desfoque de fundo nos selinhos sobre as fotos dos cards (cada
+   um obrigava o navegador a redesenhar a foto embaixo durante a rolagem). */
+@media (hover: none) {
+  .store-fx main article [class~="backdrop-blur"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (hover: none) {
+  /* Cabeçalho fixo sem desfoque no celular: o desfoque era recalculado a
+     cada quadro da rolagem. Fundo quase sólido no lugar. */
+  .store-fx .fx-header {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: color-mix(in srgb, var(--bg) 97%, transparent);
+  }
+  /* Fotos entram só com fade (sem desfoque animado) enquanto se rola. */
+  .store-fx.fx-ready main img:not(.is-loaded) {
+    filter: none;
+  }
+  .store-fx.fx-ready main img {
+    transition: opacity 0.5s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }

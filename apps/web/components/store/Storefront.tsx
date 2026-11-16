@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import type { CartLine, OrderLine, PublicProduct, PublicStore, StoreSlide } from "@/lib/store";
-import { PAYMENT_TERMS, darkVariant, formatWhatsappDisplay, priceLabel, themeVars, whatsappLink } from "@/lib/store";
+import { PAYMENT_TERMS, darkVariant, formatWhatsappDisplay, priceLabel, storeBackground, themeVars, whatsappLink } from "@/lib/store";
 import { focusStyle } from "@/lib/focus";
 import { matchesSearch } from "@/lib/search";
 import { trackStoreEvent, useVisitTracker } from "@/lib/visits";
@@ -511,6 +511,7 @@ export function Storefront({ slug }: { slug: string }) {
   const effectiveTheme =
     settings?.auto_dark && prefersDark ? darkVariant(settings.theme) : (settings?.theme ?? "light");
   const vars = themeVars(settings?.accent ?? "indigo", effectiveTheme);
+  const background = settings ? storeBackground(settings) : null;
 
   if (!store || !settings) {
     return (
@@ -615,9 +616,15 @@ export function Storefront({ slug }: { slug: string }) {
     <div
       style={vars}
       ref={rootRef}
-      className="store-fx fx-texture min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
+      className="store-fx fx-texture relative min-h-screen overflow-x-clip bg-[var(--bg)] font-[family-name:var(--font-sans)] text-[var(--ink)] antialiased selection:bg-[var(--accent)] selection:text-[var(--accent-ink)]"
     >
-      <header className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl">
+      {background && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-[2]" style={background.layer} />
+      )}
+      <header
+        style={background?.header}
+        className="fx-header sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--bg-glass)] backdrop-blur-xl"
+      >
         <AnnouncementBar
           items={[
             PAYMENT_TERMS,
@@ -698,7 +705,8 @@ export function Storefront({ slug }: { slug: string }) {
           {tab === 0 && (
             <div className="space-y-20 sm:space-y-28">
               <div className="space-y-10 sm:space-y-14">
-                <div className="lg:relative lg:left-1/2 lg:-mt-8 lg:w-screen lg:-translate-x-1/2">
+                {/* No celular e no computador a capa vai de ponta a ponta. */}
+                <div className="-mx-4 -mt-6 sm:mx-0 sm:mt-0 lg:relative lg:left-1/2 lg:-mt-8 lg:w-screen lg:-translate-x-1/2">
                   <HeroSlider
                     slides={slides}
                     storeName={storeName}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { StoreSlide } from "@/lib/store";
+import { slideMobileUrl } from "@/lib/store";
 import { IconArrowRight, IconChevronLeft, IconChevronRight, IconWhatsapp, useSwipe } from "./ui";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
@@ -10,6 +11,9 @@ const SLIDE_MS = 5500;
 // estreitas/largas não deixarem a capa alta demais ou fina demais.
 const DEFAULT_RATIO = 16 / 9;
 const MIN_RATIO = 1;
+// No celular a capa pode ser em pé (arte própria para celular), como uma vitrine de tela cheia.
+const MIN_RATIO_MOBILE = 0.5;
+const MOBILE_QUERY = "(max-width: 639px)";
 const MAX_RATIO = 3;
 
 export function HeroSlider({
@@ -17,8 +21,10 @@ export function HeroSlider({
   storeName,
   tagline,
   whatsappHref,
+  orderHref,
   onCatalog,
 }: {
+  orderHref?: string;
   slides: StoreSlide[];
   storeName: string;
   tagline: string;
@@ -34,7 +40,8 @@ export function HeroSlider({
   // altura da página no meio da troca.
   const measureFirst = useCallback((img: HTMLImageElement | null) => {
     if (!img || !img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return;
-    setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, img.naturalWidth / img.naturalHeight)));
+    const mobile = typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches;
+    setRatio(Math.min(MAX_RATIO, Math.max(mobile ? MIN_RATIO_MOBILE : MIN_RATIO, img.naturalWidth / img.naturalHeight)));
   }, []);
   const count = slides.length;
 
@@ -68,7 +75,7 @@ export function HeroSlider({
   return (
     <section
       aria-roledescription="carrossel"
-      className="group relative isolate w-full overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-40px_rgba(0,0,0,0.45)] lg:rounded-none lg:border-x-0 lg:border-t-0 lg:shadow-none"
+      className="group relative isolate w-full overflow-hidden bg-[var(--surface)] sm:rounded-[28px] sm:border sm:border-[var(--line)] sm:shadow-[0_30px_80px_-40px_rgba(0,0,0,0.45)] lg:rounded-none lg:border-x-0 lg:border-t-0 lg:shadow-none"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
         setPaused(false);
@@ -95,7 +102,11 @@ export function HeroSlider({
         style={{ aspectRatio: String(ratio) }}
         // Capa sem texto (arte pronta, com o botão já desenhado): clicar abre o catálogo.
         onClick={() => {
-          if (!hasText) onCatalog();
+          if (hasText) return;
+          const link = (current?.link ?? "").trim();
+          if (link === "whatsapp") window.open(orderHref || whatsappHref, "_blank", "noopener,noreferrer");
+          else if (/^https?:\/\//.test(link)) window.open(link, "_blank", "noopener,noreferrer");
+          else onCatalog();
         }}
       >
       {slides.map((slide, i) => {
@@ -123,6 +134,9 @@ export function HeroSlider({
             }`}
           />
           {/* A foto em si: inteira (sem corte) ou enquadrada, se o lojista escolheu. */}
+          {/* Arte em pé no celular, quando o lojista enviou uma. */}
+          <picture className="contents">
+          {slideMobileUrl(slide) && <source media={MOBILE_QUERY} srcSet={imgSrc(slideMobileUrl(slide), IMG_WIDTH.hero)} />}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imgSrc(slide.url, IMG_WIDTH.hero)}
@@ -133,6 +147,7 @@ export function HeroSlider({
             className={`relative h-full w-full ${framed ? "object-cover" : "object-contain"}`}
             style={framed ? { objectPosition: `${slide.x}% ${slide.y}%` } : undefined}
           />
+          </picture>
         </div>
         );
       })}
@@ -143,7 +158,7 @@ export function HeroSlider({
       )}
       </div>
 
-      <div className={`relative px-5 pt-5 sm:absolute sm:bottom-0 sm:left-0 sm:right-0 sm:p-10 sm:pb-20 lg:mx-auto lg:max-w-[1600px] lg:px-14 lg:pb-24 ${count > 1 ? "pb-12" : "pb-5"} ${hasText ? "" : "sm:hidden"}`}>
+      <div className={`relative px-5 pt-5 sm:absolute sm:bottom-0 sm:left-0 sm:right-0 sm:p-10 sm:pb-20 lg:mx-auto lg:max-w-[1600px] lg:px-14 lg:pb-24 ${count > 1 ? "pb-12" : "pb-5"} ${hasText ? "" : "hidden"}`}>
         <div key={`${index}-${title}`} className={`max-w-2xl text-[var(--ink)] sm:text-white ${hasText ? "space-y-4" : ""}`}>
           {title ? (
             <h1
@@ -199,13 +214,13 @@ export function HeroSlider({
                 key={i}
                 onClick={() => go(i)}
                 aria-label={`Ir para o slide ${i + 1}`}
-                className="relative h-1 flex-1 overflow-hidden rounded-full bg-[var(--line)] sm:bg-white/40"
+                className={`relative h-1 flex-1 overflow-hidden rounded-full sm:bg-white/40 ${hasText ? "bg-[var(--line)]" : "bg-white/45 shadow-sm"}`}
               >
-                {i < index && <span className="absolute inset-0 bg-[var(--accent)] sm:bg-white" />}
+                {i < index && <span className={`absolute inset-0 sm:bg-white ${hasText ? "bg-[var(--accent)]" : "bg-white"}`} />}
                 {i === index && (
                   <span
                     key={progressKey}
-                    className="absolute inset-0 origin-left animate-progress bg-[var(--accent)] sm:bg-white"
+                    className={`absolute inset-0 origin-left animate-progress sm:bg-white ${hasText ? "bg-[var(--accent)]" : "bg-white"}`}
                     style={{ animationPlayState: paused ? "paused" : "running" }}
                   />
                 )}

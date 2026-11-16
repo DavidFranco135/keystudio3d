@@ -706,6 +706,10 @@ class StoreSlide(BaseModel):
     # Enquadramento da foto (0-100). Sem valores = foto inteira, sem corte (padrão).
     x: float | None = Field(default=None, ge=0, le=100)
     y: float | None = Field(default=None, ge=0, le=100)
+    # Versão da arte para celular (em pé). Vazio = usa a mesma foto.
+    mobile_url: str = Field(default="", max_length=2000)
+    # Ao tocar na capa: "" = catálogo; "whatsapp" = conversa; ou um link https.
+    link: str = Field(default="", max_length=600)
 
 
 class StoreHighlight(BaseModel):
@@ -772,6 +776,12 @@ class StoreSettings(BaseModel):
     production_days: str = Field(default="", max_length=80)
     # Modelo 3D (.glb) de cada produto: {id do produto: link https}.
     model_urls: dict[str, str] = Field(default_factory=dict)
+    # Fundo da loja: "none" (liso) ou "foto" (uma foto enviada, bem esmaecida),
+    # intensidade em % e se vai também no cabeçalho.
+    background_style: str = Field(default="none", pattern="^(none|foto)$")
+    background_url: str = Field(default="", max_length=2000)
+    background_opacity: int = Field(default=18, ge=3, le=60)
+    background_header: bool = False
 
     @field_validator("trust_badges")
     @classmethod
@@ -895,6 +905,10 @@ class PublicStoreSettings(BaseModel):
     auto_dark: bool = False
     trust_badges: list[str] = Field(default_factory=list)
     production_days: str = ""
+    background_style: str = "none"
+    background_url: str = ""
+    background_opacity: int = 18
+    background_header: bool = False
 
 
 class PublicStoreResponse(BaseModel):

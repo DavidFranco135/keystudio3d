@@ -1,5 +1,16 @@
+import { IMG_WIDTH, imgSrc } from "@/lib/img";
 // x / y: enquadramento (0-100). Sem valores = foto inteira, sem corte.
-export type StoreSlide = { url: string; title: string; subtitle: string; x?: number | null; y?: number | null };
+// mobile_url: arte em pé para o celular ("" ou ausente = usa a mesma foto).
+// link: ao tocar — "" = catálogo, "whatsapp" = conversa, ou um link https.
+export type StoreSlide = {
+  url: string;
+  title: string;
+  subtitle: string;
+  x?: number | null;
+  y?: number | null;
+  mobile_url?: string;
+  link?: string;
+};
 export type StoreHighlight = { title: string; text: string };
 // cover_url: foto principal da categoria na vitrine ("" = automática).
 // cover_x / cover_y: enquadramento da foto principal (0-100, 50 = centro).
@@ -50,6 +61,11 @@ export type StoreSettings = {
   production_days?: string;
   // Modelo 3D (.glb) de cada produto: {id do produto: link https}.
   model_urls?: Record<string, string>;
+  // Fundo da loja (liso ou foto), intensidade em % e se vai no cabeçalho.
+  background_style?: "none" | "foto";
+  background_url?: string;
+  background_opacity?: number;
+  background_header?: boolean;
 };
 
 export type StoreAdminResponse = { slug: string; name: string; settings: StoreSettings };
@@ -91,6 +107,40 @@ export type PublicStore = {
 };
 
 export type CartLine = { id: string; qty: number; note: string };
+
+// Arte em pé (celular) do slide, quando o lojista enviou uma.
+export function slideMobileUrl(slide: { url: string; mobile_url?: string }): string {
+  return slide.mobile_url || "";
+}
+
+// Fundo da loja: camada fixa e esmaecida atrás do conteúdo (+ cabeçalho).
+export function storeBackground(s: {
+  background_style?: string;
+  background_url?: string;
+  background_opacity?: number;
+  background_header?: boolean;
+}): { layer: React.CSSProperties; header?: React.CSSProperties } | null {
+  const raw = s.background_style === "foto" ? (s.background_url ?? "").trim() : "";
+  if (!raw) return null;
+  const url = imgSrc(raw, IMG_WIDTH.hero);
+  const pct = Math.max(3, Math.min(60, s.background_opacity ?? 18));
+  const image = `url("${url.replace(/"/g, "%22")}")`;
+  const layer: React.CSSProperties = {
+    // Mais apagado no centro (onde ficam os textos), mais visível nas bordas.
+    backgroundImage: `radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--bg) 45%, transparent), transparent 80%), ${image}`,
+    backgroundSize: "auto, cover",
+    backgroundRepeat: "no-repeat, no-repeat",
+    backgroundPosition: "center, center",
+    opacity: pct / 100,
+  };
+  if (!s.background_header) return { layer };
+  const veil = Math.max(35, Math.min(92, Math.round(100 - pct * 1.6)));
+  const v = `color-mix(in srgb, var(--surface) ${veil}%, transparent)`;
+  return {
+    layer,
+    header: { backgroundImage: `linear-gradient(${v}, ${v}), ${image}`, backgroundSize: "auto, cover", backgroundPosition: "center, center" },
+  };
+}
 
 export const DEFAULT_WHATSAPP = "5521970386065";
 

@@ -4,18 +4,15 @@
 // cometa de luz cobre gira, o anel acende com faíscas e a logo surge num
 // disco escuro no centro. Depois tudo se dissolve e a loja aparece.
 //
-// - Primeira visita na sessão: animação completa (~2,4 s), e só sai quando a
-//   loja já carregou (serve de tela de carregamento).
-// - Visitas seguintes na mesma sessão, ou aparelho com "reduzir movimento":
-//   só o disco com a logo enquanto carrega, e sai rápido.
+// - Toda vez que o site abre: três voltas do anel e explosão (~3,6 s), e só
+//   sai quando a loja já carregou (serve de tela de carregamento).
 // - Clicar/tocar pula a abertura (quando a loja já carregou).
 import { useEffect, useRef, useState } from "react";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
 
-const SEEN_KEY = "keystudio-abertura-vista";
 const LOGO_KEY = "keystudio-abertura-logo";
-// Duas voltas (~2 s) + explosão que esmaece (~1 s); só então a loja abre.
-const INTRO_MS = 3050;
+// Três voltas (~2,6 s) + explosão que esmaece (~1 s); só então a loja abre.
+const INTRO_MS = 3650;
 const EXIT_MS = 650;
 const MAX_WAIT_MS = 7000;
 
@@ -25,7 +22,7 @@ type Phase = "intro" | "loader" | "exit" | "done";
 const SPARKS = Array.from({ length: 28 }, (_, i) => ({
   angle: (360 / 28) * i + (i % 2 ? 7 : -5),
   distance: 70 + ((i * 47) % 90),
-  delay: 2000 + ((i * 29) % 140),
+  delay: 2600 + ((i * 29) % 140),
   size: i % 4 === 0 ? 7 : i % 2 ? 4 : 5,
 }));
 
@@ -36,24 +33,14 @@ export function SplashIntro({ logoUrl, name, ready }: { logoUrl?: string; name: 
   const startedAt = useRef(0);
   const minMs = useRef(INTRO_MS);
 
-  // Decide o modo assim que a página abre no navegador.
+  // A abertura completa (três voltas e explosão) toca sempre que o site abre.
   useEffect(() => {
     startedAt.current = performance.now();
-    let seen = false;
-    let reduce = false;
     try {
-      seen = window.sessionStorage.getItem(SEEN_KEY) === "1";
-      window.sessionStorage.setItem(SEEN_KEY, "1");
-      reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCachedLogo(window.localStorage.getItem(LOGO_KEY));
     } catch {
-      // navegação privada: segue com a abertura completa
-    }
-    if (seen || reduce) {
-      minMs.current = 350;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase("loader");
+      // navegação privada: segue sem a logo guardada
     }
   }, []);
 

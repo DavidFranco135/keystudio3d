@@ -307,3 +307,20 @@ def test_store_badges_lead_time_dark_and_3d_models(client: TestClient):
         url, json={"model_urls": {product["id"]: "javascript:alert(1)"}}, headers=headers
     )
     assert bad.status_code == 422
+
+
+def test_store_background_and_mobile_slide(client: TestClient):
+    org_id, slug, headers = _setup(client)
+    url = f"/api/v1/organizations/{org_id}/store"
+    payload = {
+        "background_style": "foto",
+        "background_url": "https://i.ibb.co/x/fundo.jpg",
+        "background_opacity": 25,
+        "slides": [{"url": "https://x/a.jpg", "mobile_url": "https://x/a-cel.jpg", "link": "whatsapp"}],
+    }
+    assert client.put(url, json=payload, headers=headers).status_code == 200
+    store_use_cases._public_cache.clear()
+    s = client.get(f"/api/v1/public/stores/{slug}").json()["settings"]
+    assert (s["background_style"], s["background_opacity"]) == ("foto", 25)
+    assert s["slides"][0]["mobile_url"] == "https://x/a-cel.jpg" and s["slides"][0]["link"] == "whatsapp"
+    assert client.put(url, json={"background_style": "neon"}, headers=headers).status_code == 422

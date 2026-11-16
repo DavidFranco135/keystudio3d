@@ -375,32 +375,32 @@
   opacity: 0;
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media all {
   /* abertura completa */
-  /* duas voltas completas acelerando e freando; ao fechar, explode */
+  /* três voltas completas acelerando e freando; ao fechar, explode */
   .moria-splash.is-intro .ms-spin {
-    animation: ms-spin-in 2s cubic-bezier(0.5, 0, 0.3, 1) both, ms-fade-out 0.3s ease 1.92s both;
+    animation: ms-spin-in 2.6s cubic-bezier(0.5, 0, 0.3, 1) both, ms-fade-out 0.3s ease 2.52s both;
   }
-  .moria-splash.is-intro .ms-full { animation: ms-full 1.05s ease 1.92s both; }
-  .moria-splash.is-intro .ms-halo { animation: ms-flash 1.05s ease-out 1.95s both; }
-  .moria-splash.is-intro .ms-wave { animation: ms-wave 0.95s cubic-bezier(0.15, 0.6, 0.3, 1) 1.98s both; }
-  .moria-splash.is-intro .ms-wave-2 { animation-delay: 2.12s; }
-  .moria-splash.is-intro .ms-ring { animation: ms-shake 0.4s ease-out 1.97s both; }
+  .moria-splash.is-intro .ms-full { animation: ms-full 1.05s ease 2.52s both; }
+  .moria-splash.is-intro .ms-halo { animation: ms-flash 1.05s ease-out 2.55s both; }
+  .moria-splash.is-intro .ms-wave { animation: ms-wave 0.95s cubic-bezier(0.15, 0.6, 0.3, 1) 2.58s both; }
+  .moria-splash.is-intro .ms-wave-2 { animation-delay: 2.72s; }
+  .moria-splash.is-intro .ms-ring { animation: ms-shake 0.4s ease-out 2.57s both; }
   .moria-splash.is-intro .moria-splash-disc { animation: ms-disc 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both; }
-  .moria-splash.is-intro .moria-splash-name { animation: ms-name 0.8s ease 1.8s both; }
+  .moria-splash.is-intro .moria-splash-name { animation: ms-name 0.8s ease 2.4s both; }
   .moria-splash-spark { animation: moria-spark 1s cubic-bezier(0.15, 0.7, 0.3, 1) both; }
   .moria-splash .ms-thin { animation: ms-rev 3.2s linear infinite; }
   /* carregando (visitas seguintes): o cometa fica girando */
   .moria-splash.is-loader .ms-spin { animation: ms-loop 1s linear infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .moria-splash .ms-full { opacity: 1; }
-  .moria-splash .ms-spin { opacity: 0; }
+  .moria-splash.is-loader .ms-full { opacity: 1; }
+  .moria-splash.is-loader .ms-spin { opacity: 0; }
 }
 
 @keyframes ms-spin-in {
   from { transform: rotate(-90deg); }
-  to { transform: rotate(630deg); }
+  to { transform: rotate(990deg); }
 }
 /* anel completo: acende forte na explosão e assenta */
 @keyframes ms-full {

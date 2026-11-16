@@ -154,6 +154,38 @@ export default function LojaAdminPage() {
     setMessage(null);
   }
 
+  // Arte em pé para o celular de um slide (sem ela, o celular usa a mesma foto).
+  async function handleSlideMobileUpload(index: number, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      update({ slides: settings.slides.map((s, j) => (j === index ? { ...s, mobile_url: url } : s)) });
+      setMessage("Foto do celular adicionada. Clique em “Salvar alterações” para publicar.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar imagem.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+  async function handleBackgroundUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !accessToken) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadImage(`${orgPath}/uploads/image`, accessToken, file);
+      update({ background_style: "foto", background_url: url });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao enviar a foto de fundo.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
   async function handleSlideUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -449,6 +481,8 @@ export default function LojaAdminPage() {
       const savedCats = (savedAny.categories ?? []) as Array<{ cover_url?: string; cover_x?: number }>;
       const savedSlides = (savedAny.slides ?? []) as Array<{ x?: number | null }>;
       const apiIsOld =
+        // Fundo da loja: a API nova sempre devolve background_style.
+        savedAny.background_style === undefined ||
         (body.product_order.length > 0 && savedAny.product_order === undefined) ||
         // Categorias: a API nova sempre devolve cover_url e cover_x.
         (body.categories.length > 0 && savedCats.some((c) => c.cover_url === undefined || c.cover_x === undefined)) ||
@@ -611,6 +645,64 @@ export default function LojaAdminPage() {
                             })
                           }
                         />
+                        <select
+                          className={input}
+                          value={slide.link === "whatsapp" ? "whatsapp" : slide.link ? "link" : ""}
+                          onChange={(e) =>
+                            update({
+                              slides: settings.slides.map((s, j) =>
+                                j === i ? { ...s, link: e.target.value === "link" ? "https://" : e.target.value } : s
+                              ),
+                            })
+                          }
+                        >
+                          <option value="">Ao tocar: abre o catálogo</option>
+                          <option value="whatsapp">Ao tocar: abre o WhatsApp</option>
+                          <option value="link">Ao tocar: abre um link…</option>
+                        </select>
+                        {slide.link && slide.link !== "whatsapp" && (
+                          <input
+                            className={input}
+                            value={slide.link}
+                            maxLength={600}
+                            placeholder="https://…"
+                            onChange={(e) =>
+                              update({ slides: settings.slides.map((s, j) => (j === i ? { ...s, link: e.target.value } : s)) })
+                            }
+                          />
+                        )}
+                        {/* Foto para celular: arte em pé, mostrada só no celular (tela cheia). */}
+                        <div className="flex flex-wrap items-center gap-2 rounded border border-neutral-800 p-2">
+                          {slide.mobile_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={slide.mobile_url} alt="" className="h-16 w-11 rounded object-cover" />
+                          ) : null}
+                          <span className="flex-1 text-xs text-neutral-500">
+                            {slide.mobile_url
+                              ? "Foto do celular (em pé)."
+                              : "Celular: usa a mesma foto. Envie uma arte em pé (ex.: 1080×1620) para a capa ocupar a tela."}
+                          </span>
+                          <label className="cursor-pointer rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-500">
+                            {slide.mobile_url ? "Trocar" : "Foto para celular"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={isUploading}
+                              onChange={(e) => handleSlideMobileUpload(i, e)}
+                            />
+                          </label>
+                          {slide.mobile_url && (
+                            <button
+                              onClick={() =>
+                                update({ slides: settings.slides.map((s, j) => (j === i ? { ...s, mobile_url: "" } : s)) })
+                              }
+                              className="rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500"
+                            >
+                              Remover
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2 sm:flex-col">
                         <button
@@ -748,6 +840,92 @@ export default function LojaAdminPage() {
                   </p>
                 )}
               </div>
+            </Card>
+
+            <Card
+              title="Fundo da loja"
+              hint="Uma imagem bem esmaecida atrás de todo o site: uma foto sua (ateliê, impressora, peças…). Os cards e textos continuam por cima, legíveis."
+            >
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["none", "Liso (sem fundo)"],
+                    ["foto", "Minha foto"],
+                  ] as const
+                ).map(([key, text]) => (
+                  <button
+                    key={key}
+                    onClick={() => update({ background_style: key })}
+                    className={`rounded-lg border px-4 py-2 text-sm ${
+                      (settings.background_style ?? "none") === key
+                        ? "border-blue-500 bg-blue-950 text-blue-200"
+                        : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                    }`}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+
+              {(settings.background_style ?? "none") === "foto" && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="h-20 w-32 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
+                    {settings.background_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imgSrc(settings.background_url, IMG_WIDTH.thumb)}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <label className="cursor-pointer rounded-lg border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500">
+                    {isUploading ? "Enviando…" : settings.background_url ? "Trocar foto" : "Enviar foto"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleBackgroundUpload} />
+                  </label>
+                  {!settings.background_url && (
+                    <span className="text-xs text-amber-400">Envie uma foto para o fundo aparecer.</span>
+                  )}
+                </div>
+              )}
+
+              {(settings.background_style ?? "none") !== "none" && (
+                <>
+                  <label className="block space-y-1">
+                    <span className="flex justify-between text-xs text-neutral-500">
+                      <span>Intensidade (quanto aparece)</span>
+                      <span>{settings.background_opacity ?? 18}%</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={3}
+                      max={60}
+                      step={1}
+                      value={settings.background_opacity ?? 18}
+                      onChange={(e) => update({ background_opacity: Number(e.target.value) })}
+                      className="w-full accent-blue-600"
+                    />
+                    <span className="flex justify-between text-[11px] text-neutral-600">
+                      <span>bem esmaecido</span>
+                      <span>forte</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-lg border border-neutral-800 p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={!!settings.background_header}
+                      onChange={(e) => update({ background_header: e.target.checked })}
+                    />
+                    <span>
+                      <span className="block text-sm">Usar também no cabeçalho</span>
+                      <span className="block text-xs text-neutral-500">
+                        A mesma imagem atrás da logo e do menu, um pouco mais visível.
+                      </span>
+                    </span>
+                  </label>
+                </>
+              )}
             </Card>
 
             <Card

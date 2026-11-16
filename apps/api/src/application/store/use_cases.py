@@ -180,6 +180,10 @@ def get_public_store(db: Session, *, slug: str) -> PublicStoreResponse:
             auto_dark=settings.auto_dark,
             trust_badges=settings.trust_badges,
             production_days=settings.production_days,
+            background_style=settings.background_style,
+            background_url=settings.background_url,
+            background_opacity=settings.background_opacity,
+            background_header=settings.background_header,
         ),
         products=products,
     )

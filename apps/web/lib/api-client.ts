@@ -65,11 +65,61 @@ export async function apiFetch<T>(
   return (await response.json()) as T;
 }
 
+// Fotos grandes (ex.: 15 MB do celular) ou em formatos que o servidor não
+// aceita são convertidas no próprio navegador antes de enviar: no máximo
+// 2560 px no lado maior, em JPEG (ou WebP, se tiver transparência), bem
+// abaixo do limite de 10 MB. Fotos já leves e em JPG/PNG/WebP vão como estão.
+const UPLOAD_OK_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const UPLOAD_SOFT_LIMIT = 2.5 * 1024 * 1024;
+const UPLOAD_MAX_SIDE = 2560;
+
+async function prepareImageForUpload(file: File): Promise<File> {
+  const okType = UPLOAD_OK_TYPES.includes(file.type);
+  if (okType && file.size <= UPLOAD_SOFT_LIMIT) return file;
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    if (okType && file.size <= 10 * 1024 * 1024) return file;
+    throw new ApiError(
+      415,
+      "Não foi possível ler esta foto. Envie em JPG ou PNG (no iPhone: Ajustes → Câmera → Formatos → Mais Compatível)."
+    );
+  }
+  const keepAlpha = file.type === "image/png" || file.type === "image/webp" || file.type === "image/gif";
+  let side = UPLOAD_MAX_SIDE;
+  let quality = 0.86;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) break;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const type = keepAlpha ? "image/webp" : "image/jpeg";
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+    if (blob && blob.size <= 9 * 1024 * 1024) {
+      bitmap.close?.();
+      const base = file.name.replace(/\.[^.]+$/, "") || "foto";
+      return new File([blob], `${base}.${type === "image/webp" ? "webp" : "jpg"}`, { type });
+    }
+    side = Math.round(side * 0.8);
+    quality = Math.max(0.6, quality - 0.08);
+  }
+  bitmap.close?.();
+  throw new ApiError(413, "A foto é grande demais mesmo depois de reduzida. Tente outra foto.");
+}
+
 export async function uploadImage(
   path: string,
   accessToken: string | null | undefined,
-  file: File
+  original: File
 ): Promise<{ url: string }> {
+  const file = await prepareImageForUpload(original);
   const formData = new FormData();
   formData.append("file", file);
 

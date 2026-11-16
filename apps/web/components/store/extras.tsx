@@ -385,6 +385,10 @@ type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{
 let deferredInstall: InstallEvent | null = null;
 const installListeners = new Set<() => void>();
 if (typeof window !== "undefined") {
+  // O navegador pode avisar antes deste código carregar: o layout da loja
+  // guarda o aviso em window.__bip, e aqui ele é recuperado.
+  const early = (window as Window & { __bip?: InstallEvent }).__bip;
+  if (early) deferredInstall = early;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredInstall = e as InstallEvent;
@@ -399,12 +403,16 @@ function subscribeInstall(cb: () => void) {
   installListeners.add(cb);
   return () => installListeners.delete(cb);
 }
-function installSnapshot(): "prompt" | "ios" | "none" {
+function installSnapshot(): "prompt" | "ios" | "manual" | "none" {
+  // Já aberto como app: não mostra o botão.
   if (window.matchMedia?.("(display-mode: standalone)").matches) return "none";
+  if ((navigator as Navigator & { standalone?: boolean }).standalone) return "none";
   if (deferredInstall) return "prompt";
   const ua = navigator.userAgent;
   const isIos = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-  return isIos ? "ios" : "none";
+  // Sem o pedido automático do navegador (app já instalado, navegador que
+  // não oferece, ou aviso ainda não chegou): mostra como instalar pelo menu.
+  return isIos ? "ios" : "manual";
 }
 
 export function InstallAppButton({ storeName, className = "" }: { storeName: string; className?: string }) {
@@ -412,7 +420,7 @@ export function InstallAppButton({ storeName, className = "" }: { storeName: str
   const [iosHelp, setIosHelp] = useState(false);
   if (mode === "none") return null;
   const onClick = async () => {
-    if (mode === "ios") {
+    if (mode === "ios" || mode === "manual") {
       setIosHelp((v) => !v);
       return;
     }
@@ -433,10 +441,16 @@ export function InstallAppButton({ storeName, className = "" }: { storeName: str
         <IconDownload className="h-4 w-4" />
         Instalar app {storeName}
       </button>
-      {iosHelp && (
+      {iosHelp && mode === "ios" && (
         <p className="mt-2 max-w-xs text-xs opacity-80">
           No iPhone: toque em <strong>Compartilhar</strong> (quadrado com seta) e depois em{" "}
           <strong>Adicionar à Tela de Início</strong>.
+        </p>
+      )}
+      {iosHelp && mode === "manual" && (
+        <p className="mt-2 max-w-xs text-xs opacity-80">
+          No menu do navegador (<strong>⋮</strong>), toque em <strong>Instalar app</strong> ou{" "}
+          <strong>Adicionar à tela inicial</strong>. Se o app já estiver instalado, ele aparece na tela do celular.
         </p>
       )}
     </div>

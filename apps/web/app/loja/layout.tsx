@@ -20,5 +20,15 @@ export const viewport: Viewport = {
 };
 
 export default function LojaLayout({ children }: { children: React.ReactNode }) {
-  return <div className={`${sans.variable} ${display.variable}`}>{children}</div>;
+  return (
+    <div className={`${sans.variable} ${display.variable}`}>
+      {/* Guarda o aviso de "instalar app" se ele chegar antes do resto da página. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bip=e;});",
+        }}
+      />
+      {children}
+    </div>
+  );
 }

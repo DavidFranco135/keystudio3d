@@ -137,7 +137,7 @@ export function storeBackground(s: {
   const image = `url("${url.replace(/"/g, "%22")}")`;
   const layer: React.CSSProperties = {
     // Mais apagado no centro (onde ficam os textos), mais visível nas bordas.
-    backgroundImage: `radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--bg) 45%, transparent), transparent 80%), ${image}`,
+    backgroundImage: `radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--bg) 25%, transparent), transparent 80%), ${image}`,
     backgroundSize: "auto, cover",
     backgroundRepeat: "no-repeat, no-repeat",
     backgroundPosition: "center, center",

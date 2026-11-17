@@ -109,8 +109,18 @@ export type PublicStore = {
 export type CartLine = { id: string; qty: number; note: string };
 
 // Arte em pé (celular) do slide, quando o lojista enviou uma.
+// Versões em retrato (celular) das artes de capa já publicadas. Usadas
+// quando o slide ainda não tem "Foto para celular" definida no painel.
+const MOBILE_SLIDE_ART: Record<string, string> = {
+  "https://i.ibb.co/zHW4cyMP/8099b3a29f76.jpg": "https://i.ibb.co/svBJCT1v/2075f0c799ac.jpg",
+  "https://i.ibb.co/tMQ87N7w/7298990598c3.jpg": "https://i.ibb.co/x8r3cWmF/6e2258a7bd78.jpg",
+  "https://i.ibb.co/Y4XJcVLt/ab798d9ee509.jpg": "https://i.ibb.co/Ld57zryT/49f81782c254.jpg",
+  "https://i.ibb.co/BHwCvzvt/228a15730592.jpg": "https://i.ibb.co/7xvKRW80/8b9645f62e2c.jpg",
+  "https://i.ibb.co/KxcNRjwm/87d792b8c561.jpg": "https://i.ibb.co/sntBZMR/e78bf3382ab3.jpg",
+};
+
 export function slideMobileUrl(slide: { url: string; mobile_url?: string }): string {
-  return slide.mobile_url || "";
+  return slide.mobile_url || MOBILE_SLIDE_ART[slide.url] || "";
 }
 
 // Fundo da loja: camada fixa e esmaecida atrás do conteúdo (+ cabeçalho).

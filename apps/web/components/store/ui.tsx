@@ -141,10 +141,27 @@ export function Reveal({
   );
 }
 
+function insideHorizontalScroller(el: Element | null, stop: Element): boolean {
+  while (el && el !== stop) {
+    if (el instanceof HTMLElement && el.scrollWidth > el.clientWidth + 2) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox === "auto" || ox === "scroll") return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 export function useSwipe(onLeft: () => void, onRight: () => void, threshold = 56) {
   const start = useRef<{ x: number; y: number } | null>(null);
   return {
     onTouchStart: (e: React.TouchEvent) => {
+      // Gesto começou numa faixa que rola para o lado (chips, carrossel…):
+      // é a faixa que deve andar, não a página trocar de aba.
+      if (insideHorizontalScroller(e.target as Element | null, e.currentTarget as Element)) {
+        start.current = null;
+        return;
+      }
       start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     },
     onTouchEnd: (e: React.TouchEvent) => {

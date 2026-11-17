@@ -554,8 +554,7 @@
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(1200px 520px at 85% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    repeating-linear-gradient(0deg, color-mix(in srgb, var(--ink) 2.5%, transparent) 0 1px, transparent 1px 5px);
+    radial-gradient(1200px 520px at 85% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
   transform: translateZ(0);
   will-change: transform;
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
@@ -1225,10 +1227,23 @@ export function Storefront({ slug }: { slug: string }) {
         <div className="border-t border-[#3a2b20]">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs sm:flex-row sm:px-6">
             <p>
-              © {new Date().getFullYear()} {storeName}. Todos os direitos reservados.
+              © {new Date().getFullYear()}{" "}
+              {/* Acesso à área interna: o nome da loja parece texto comum, mas leva ao login. */}
+              <Link href="/login" className="cursor-text text-inherit no-underline">
+                {storeName}
+              </Link>
+              . Todos os direitos reservados.
             </p>
             <p>
-              Produzido por <span className="font-semibold tracking-[0.15em] text-[#f8efe6]">NIKLAUS</span>
+              Produzido por{" "}
+              <a
+                href="https://systems-niklaus.pages.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold tracking-[0.15em] text-[#f8efe6] underline-offset-4 hover:underline"
+              >
+                NIKLAUS
+              </a>
             </p>
           </div>
         </div>

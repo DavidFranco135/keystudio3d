@@ -38,22 +38,51 @@ function friendlyMessage(status: number, message: string): string {
   return message;
 }
 
+// Sessão viva: o painel renova o acesso em segundo plano (a cada 10 min e ao
+// voltar para a janela) sem trocar o token que as páginas guardam — trocar
+// fazia todas as telas do gestor recarregarem como num F5. Toda chamada usa
+// sempre o token mais novo daqui; se ainda assim vier 401, renova e repete.
+let liveToken: string | null = null;
+let renewSession: (() => Promise<string | null>) | null = null;
+
+export function setLiveToken(token: string | null) {
+  liveToken = token;
+}
+
+export function setSessionRenewer(renew: (() => Promise<string | null>) | null) {
+  renewSession = renew;
+}
+
+function currentToken(given: string | null | undefined): string | null | undefined {
+  return given && liveToken ? liveToken : given;
+}
+
+async function withSession(given: string | null | undefined, send: (token: string | null | undefined) => Promise<Response>) {
+  const token = currentToken(given);
+  const response = await send(token);
+  if (response.status !== 401 || !token || !renewSession) return response;
+  const fresh = await renewSession().catch(() => null);
+  return fresh ? send(fresh) : response;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { accessToken?: string | null } = {}
 ): Promise<T> {
   const { accessToken, headers, body, ...rest } = options;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...rest,
-    body,
-    credentials: "include",
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
-  });
+  const response = await withSession(accessToken, (token) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...rest,
+      body,
+      credentials: "include",
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+    })
+  );
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
@@ -126,12 +155,14 @@ export async function uploadImage(
   // No Content-Type header here on purpose — the browser sets
   // multipart/form-data with the right boundary itself; forcing one
   // manually breaks the server's multipart parsing.
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-  });
+  const response = await withSession(accessToken, (token) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  );
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);

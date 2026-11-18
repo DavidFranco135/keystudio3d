@@ -7,7 +7,7 @@
 // da página, aba Início). Por isso, sempre que a página sai da tela, guardamos
 // aba, categoria, busca, produto aberto e a rolagem nesta aba do navegador
 // (sessionStorage). Se a página abrir de novo em até 30 minutos, tudo é
-// restaurado e a abertura animada é pulada.
+// restaurado (a abertura animada continua tocando normalmente).
 import { useEffect, useRef } from "react";
 
 const KEY = "loja-volta";

@@ -9,7 +9,6 @@
 // - Clicar/tocar pula a abertura (quando a loja já carregou).
 import { useEffect, useRef, useState } from "react";
 import { IMG_WIDTH, imgSrc } from "@/lib/img";
-import { takeSnap } from "@/lib/page-restore";
 
 const LOGO_KEY = "keystudio-abertura-logo";
 // Três voltas (~2,6 s) + explosão que esmaece (~1 s); só então a loja abre.
@@ -37,12 +36,6 @@ export function SplashIntro({ logoUrl, name, ready }: { logoUrl?: string; name: 
   // A abertura completa (três voltas e explosão) toca sempre que o site abre.
   useEffect(() => {
     startedAt.current = performance.now();
-    // Página recarregada pelo celular depois de minimizar: sem a abertura
-    // completa, só o tempo de carregar a loja.
-    if (takeSnap()) {
-      minMs.current = 0;
-      setPhase("loader");
-    }
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCachedLogo(window.localStorage.getItem(LOGO_KEY));

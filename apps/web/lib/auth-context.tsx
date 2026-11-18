@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { apiFetch, ApiError } from "./api-client";
+import { apiFetch, ApiError, setLiveToken, setSessionRenewer } from "./api-client";
 import type { AuthResponse, MeResponse, Membership, User } from "./types";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -105,9 +105,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status !== "authenticated") return;
+    // Renovação sob demanda (quando uma chamada volta 401).
+    setSessionRenewer(() =>
+      refreshSession()
+        .then((tokens) => {
+          setLiveToken(tokens.access_token);
+          return tokens.access_token;
+        })
+        .catch(() => null)
+    );
     const intervalId = setInterval(() => {
       refreshSession()
-        .then((tokens) => setAccessToken(tokens.access_token))
+        .then((tokens) => setLiveToken(tokens.access_token))
         .catch(() => undefined);
     }, REFRESH_INTERVAL_MS);
     // Em segundo plano o celular pausa o timer acima e o acesso (15 min)
@@ -115,15 +124,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       refreshSession()
-        .then((tokens) => setAccessToken(tokens.access_token))
+        .then((tokens) => setLiveToken(tokens.access_token))
         .catch(() => undefined);
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisible);
+      setSessionRenewer(null);
     };
   }, [status]);
+
+  // O token das páginas só muda ao entrar/sair; as renovações vão direto
+  // para o api-client (setLiveToken) e não recarregam as telas.
+  useEffect(() => {
+    setLiveToken(accessToken);
+  }, [accessToken]);
 
   const login = useCallback(
     async (email: string, password: string, rememberMe = false) => {

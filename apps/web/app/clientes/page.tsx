@@ -130,11 +130,6 @@ export default function ClientesPage() {
     }
   }
 
-  const filtered = customers.filter(
-    (c) =>
-      matchesSearch(search, c.name, c.email) ||
-      (search.trim() !== "" && (c.phone ?? "").replace(/\D/g, "").includes(search.replace(/\D/g, "") || "\u0000"))
-  );
 
   // Pedidos de cada cliente, do mais recente para o mais antigo.
   const ordersByCustomer = useMemo(() => {
@@ -150,6 +145,20 @@ export default function ClientesPage() {
 
   const productName = (id: string | null) =>
     (id && products.find((p) => p.id === id)?.name) || "Produto";
+
+  // Lupa: nome, e-mail, telefone, CPF/CNPJ ou um produto que o cliente já pediu.
+  const filtered = customers.filter((c) => {
+    if (!search.trim()) return true;
+    const digits = search.replace(/\D/g, "");
+    const bought = (ordersByCustomer.get(c.id) ?? [])
+      .flatMap((o) => o.items.map((i) => (i.product_id ? productName(i.product_id) : "")))
+      .join(" ");
+    return (
+      matchesSearch(search, c.name, c.email, bought) ||
+      (digits.length >= 3 &&
+        ((c.phone ?? "").replace(/\D/g, "").includes(digits) || (c.document ?? "").replace(/\D/g, "").includes(digits)))
+    );
+  });
 
   if (status !== "authenticated") {
     return (
@@ -168,7 +177,7 @@ export default function ClientesPage() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Buscar por nome, e-mail ou telefone…"
+            placeholder="Buscar cliente por nome, telefone, e-mail ou produto…"
             className="w-full sm:max-w-sm"
           />
           <button

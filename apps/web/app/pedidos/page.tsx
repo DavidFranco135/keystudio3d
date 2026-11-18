@@ -23,6 +23,8 @@ import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { ProductPicker } from "@/components/ProductPicker";
 import { STATUS_LABELS, STATUS_TONE } from "@/lib/order-status";
 import { OrderPdfDialog } from "@/components/OrderPdfDialog";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesSearch } from "@/lib/search";
 
 function nextStatus(current: string): string | null {
   const idx = ORDER_STATUSES.indexOf(current as (typeof ORDER_STATUSES)[number]);
@@ -275,6 +277,8 @@ export default function PedidosPage() {
   // Filtro por status vindo do link (ex.: barra do gráfico do Painel). Lido
   // depois de montar: ao navegar dentro do app, a URL nova só existe nesse ponto.
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // Lupa: busca por cliente, produto do pedido, número ou observação.
+  const [search, setSearch] = useState("");
   useEffect(() => {
     const id = setTimeout(() => {
       const wanted = new URLSearchParams(window.location.search).get("status");
@@ -825,9 +829,23 @@ export default function PedidosPage() {
     }
   }
 
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+  const matchesOrder = (o: Order) => {
+    if (!search.trim()) return true;
+    const customer = customerById.get(o.customer_id);
+    const productNames = o.items.map((i) => (i.product_id ? productNameById.get(i.product_id) ?? "" : "")).join(" ");
+    const digits = search.replace(/\D/g, "");
+    return (
+      matchesSearch(search, customer?.name, productNames, o.notes, o.id.slice(0, 8)) ||
+      (digits.length >= 4 && (customer?.phone ?? "").replace(/\D/g, "").includes(digits))
+    );
+  };
   const visibleOrders = orders.filter(
     (o) =>
-      (filter === "all" || effectiveProduction(o) === filter) && (!statusFilter || o.status === statusFilter)
+      (filter === "all" || effectiveProduction(o) === filter) &&
+      (!statusFilter || o.status === statusFilter) &&
+      matchesOrder(o)
   );
 
   if (status !== "authenticated") {
@@ -842,6 +860,13 @@ export default function PedidosPage() {
     <AppShell title="Pedidos">
       <div className="mx-auto max-w-5xl space-y-6">
         {error && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{error}</p>}
+
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por cliente, produto ou nº do pedido…"
+          className="sm:max-w-md"
+        />
 
         <div className="flex flex-wrap gap-2">
           {(["all", "todo", "doing", "late", "done"] as const).map((key) => {
@@ -1059,7 +1084,11 @@ export default function PedidosPage() {
             <p className="px-4 py-6 text-center text-sm text-neutral-500">Carregando…</p>
           ) : visibleOrders.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-neutral-500">
-              {orders.length === 0 ? "Nenhum pedido ainda." : "Nenhum pedido neste filtro."}
+              {orders.length === 0
+                ? "Nenhum pedido ainda."
+                : search.trim()
+                  ? `Nenhum pedido encontrado para “${search.trim()}”.`
+                  : "Nenhum pedido neste filtro."}
             </p>
           ) : (
             visibleOrders.map((order) => {

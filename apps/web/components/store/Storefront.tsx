@@ -16,6 +16,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { useStoreFx } from "./fx";
 import { HeroSlider } from "./HeroSlider";
 import { SplashIntro } from "./SplashIntro";
+import { restoreScroll, takeSnap, useSnapSaver } from "@/lib/page-restore";
 import { ProductCard } from "./ProductCard";
 import { ProductModal } from "./ProductModal";
 import {
@@ -289,6 +290,27 @@ export function Storefront({ slug }: { slug: string }) {
   useStoreFx(rootRef, store !== null);
   useStoreServiceWorker();
   const prefersDark = usePrefersDark();
+
+  // O celular descartou a aba ao minimizar e recarregou: volta para a mesma
+  // aba, categoria, busca, produto aberto e rolagem (ver lib/page-restore).
+  useSnapSaver(() => ({ tab, category, search, product: openProductId }));
+  const restoreDone = useRef(false);
+  useEffect(() => {
+    if (!store || restoreDone.current) return;
+    restoreDone.current = true;
+    const snap = takeSnap();
+    if (!snap) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setTab(snap.tab);
+    setCategory(snap.category);
+    setSearch(snap.search);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    restoreScroll(snap.y);
+    const deepLink = new URL(window.location.href).searchParams.has("p");
+    const product = snap.product;
+    if (product && !deepLink && store.products.some((p) => p.id === product))
+      setTimeout(() => setOpenProductId(product), 350);
+  }, [store]);
 
   // Link direto do produto (?p=<id>): abre o produto assim que a loja carrega.
   // O ?p= sai do endereço de base para "voltar" não reabrir o mesmo produto.

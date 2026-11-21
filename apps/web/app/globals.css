@@ -593,10 +593,6 @@
   0%, 100% { transform: translateY(0) rotate(-1.5deg); }
   50% { transform: translateY(-7px) rotate(1.5deg); }
 }
-@keyframes key-talk {
-  0%, 100% { transform: translateY(-3px) scale(1, 1); }
-  50% { transform: translateY(-5px) scale(1.02, 0.985); }
-}
 @keyframes key-hello {
   0% { transform: rotate(0); }
   25% { transform: rotate(-7deg) translateY(-4px); }
@@ -614,7 +610,6 @@
 }
 .animate-key-in { animation: key-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 .key-float { transform-origin: 50% 90%; animation: key-float 4.2s ease-in-out infinite; }
-.key-float.key-talk { animation: key-talk 0.32s ease-in-out infinite; }
 .key-float.key-hello { animation: key-hello 1.2s ease-in-out; }
 .key-glow {
   position: absolute; inset: 18% 8% 8%; border-radius: 9999px; pointer-events: none;
@@ -623,5 +618,4 @@
 }
 .key-bubble { transform-origin: 0% 100%; animation: key-bubble-in 0.35s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
-  .animate-key-in, .key-float, .key-float.key-talk, .key-float.key-hello, .key-glow, .key-bubble { animation: none; }
 }

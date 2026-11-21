@@ -16,6 +16,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { useStoreFx } from "./fx";
 import { HeroSlider } from "./HeroSlider";
 import { SplashIntro } from "./SplashIntro";
+import { KeyMascot } from "./KeyMascot";
 import { restoreScroll, takeSnap, useSnapSaver } from "@/lib/page-restore";
 import { ProductCard } from "./ProductCard";
 import { ProductModal } from "./ProductModal";
@@ -1292,6 +1293,13 @@ export function Storefront({ slug }: { slug: string }) {
           <IconWhatsapp className="h-7 w-7" />
         </a>
       </div>
+
+      <KeyMascot
+        storeName={storeName}
+        whatsappUrl={waGeneral}
+        onOpenCatalog={() => goTab(1)}
+        paused={!!openProduct || cartOpen || searchOpen}
+      />
 
       {toast && (
         <div className="fixed inset-x-0 bottom-24 z-[90] flex justify-center px-4">

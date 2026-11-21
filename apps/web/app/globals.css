@@ -583,3 +583,45 @@
     transition: opacity 0.5s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
+
+/* ── Key, a mascote (components/store/KeyMascot.tsx) ───────────────────── */
+@keyframes key-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes key-float {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50% { transform: translateY(-7px) rotate(1.5deg); }
+}
+@keyframes key-talk {
+  0%, 100% { transform: translateY(-3px) scale(1, 1); }
+  50% { transform: translateY(-5px) scale(1.02, 0.985); }
+}
+@keyframes key-hello {
+  0% { transform: rotate(0); }
+  25% { transform: rotate(-7deg) translateY(-4px); }
+  50% { transform: rotate(5deg) translateY(-6px); }
+  75% { transform: rotate(-3deg) translateY(-3px); }
+  100% { transform: rotate(0); }
+}
+@keyframes key-glow {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50% { opacity: 0.6; transform: scale(1.04); }
+}
+@keyframes key-bubble-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.animate-key-in { animation: key-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.key-float { transform-origin: 50% 90%; animation: key-float 4.2s ease-in-out infinite; }
+.key-float.key-talk { animation: key-talk 0.32s ease-in-out infinite; }
+.key-float.key-hello { animation: key-hello 1.2s ease-in-out; }
+.key-glow {
+  position: absolute; inset: 18% 8% 8%; border-radius: 9999px; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, #ff7ab8 55%, transparent), transparent);
+  filter: blur(10px); animation: key-glow 4.2s ease-in-out infinite;
+}
+.key-bubble { transform-origin: 0% 100%; animation: key-bubble-in 0.35s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-key-in, .key-float, .key-float.key-talk, .key-float.key-hello, .key-glow, .key-bubble { animation: none; }
+}
